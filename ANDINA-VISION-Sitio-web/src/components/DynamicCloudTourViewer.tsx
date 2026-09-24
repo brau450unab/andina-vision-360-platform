@@ -1,17 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Maximize2, 
-  RotateCcw, 
-  Compass, 
-  Smartphone, 
-  ZoomIn, 
-  ZoomOut, 
-  Info, 
-  ExternalLink, 
-  Play, 
-  X,
-  Layers,
-  ChevronRight
+  Maximize2, RotateCcw, Smartphone, Info, 
+  ExternalLink, X, ChevronRight, Minimize2
 } from 'lucide-react';
 
 interface Hotspot {
@@ -53,56 +43,10 @@ interface DynamicCloudTourViewerProps {
 }
 
 const DEFAULT_DEMO_TOUR: TourConfig = {
-  id: 'tour_cordillera_dji',
-  title: 'Vuelo Panorámico Dron DJI - Cordillera de los Andes',
-  allow_gyroscope: true,
-  first_scene_id: 'scene_aerial',
+  id: 'tour_demo',
+  title: 'Demo Tour',
   scenes: [
-    {
-      id: 'scene_aerial',
-      title: 'Cota Aérea 1500m (DJI Mavic 3E)',
-      preview_url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=2048&q=80',
-      default_yaw: 0,
-      default_pitch: -15,
-      hotspots: [
-        {
-          id: 'hp1',
-          type: 'info_popup',
-          yaw: 35,
-          pitch: -8,
-          title: 'Estación de Monitoreo & Faena',
-          description: 'Inspección de avance de obras civiles con fotogrametría de alta precisión.',
-          youtube_video_id: 'dQw4w9WgXcQ',
-          drive_url: 'https://drive.google.com',
-          drive_label: 'Ver entregables en Google Drive'
-        },
-        {
-          id: 'hp2',
-          type: 'scene_link',
-          yaw: -95,
-          pitch: -12,
-          tooltip: 'Descender a Zona de Acceso',
-          target_scene_id: 'scene_ground'
-        }
-      ]
-    },
-    {
-      id: 'scene_ground',
-      title: 'Zona de Acceso y Casona (Toma Frontal)',
-      preview_url: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=2048&q=80',
-      default_yaw: 160,
-      default_pitch: 0,
-      hotspots: [
-        {
-          id: 'hp3',
-          type: 'scene_link',
-          yaw: 160,
-          pitch: 15,
-          tooltip: 'Subir a Cota Aérea 1500m',
-          target_scene_id: 'scene_aerial'
-        }
-      ]
-    }
+    { id: 's1', title: 'Scene 1', preview_url: '', default_yaw: 0, default_pitch: 0 }
   ]
 };
 
@@ -126,11 +70,14 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
   const [gyroActive, setGyroActive] = useState(false);
   const [activeModalHotspot, setActiveModalHotspot] = useState<Hotspot | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // New state for loader
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   useEffect(() => {
     async function fetchTour() {
       try {
-        const res = await fetch(`${apiBaseUrl}/embed/${tourId}`);
+        const res = await fetch(`\${apiBaseUrl}/embed/\${tourId}`);
         if (res.ok) {
           const data = await res.json();
           setTour(data);
@@ -142,26 +89,19 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
           }
         }
       } catch (err) {
-        console.log("Usando tour local de demostración:", err);
+        console.log("Usando tour local");
       }
     }
     fetchTour();
   }, [tourId, apiBaseUrl]);
 
   const toggleGyroscope = async () => {
-    if (gyroActive) {
-      setGyroActive(false);
-      return;
-    }
-
+    if (gyroActive) { setGyroActive(false); return; }
     if (typeof (DeviceOrientationEvent as any) !== 'undefined' && typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
       try {
         const permission = await (DeviceOrientationEvent as any).requestPermission();
-        if (permission === 'granted') {
-          setGyroActive(true);
-        } else {
-          alert('Permiso de sensores de orientación denegado en Safari/iOS.');
-        }
+        if (permission === 'granted') setGyroActive(true);
+        else alert('Permiso de sensores denegado.');
       } catch (e) {
         console.error('Error al solicitar permiso de orientación:', e);
       }
@@ -174,14 +114,12 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
 
   useEffect(() => {
     if (!gyroActive) return;
-
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.alpha !== null && e.beta !== null) {
         setYaw((-e.alpha * Math.PI) / 180);
         setPitch(Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, ((e.beta - 90) * Math.PI) / 180)));
       }
     };
-
     window.addEventListener('deviceorientation', handleOrientation);
     return () => window.removeEventListener('deviceorientation', handleOrientation);
   }, [gyroActive]);
@@ -189,9 +127,10 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const gl = canvas.getContext('webgl');
     if (!gl) return;
+
+    setImageLoaded(false);
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -205,6 +144,7 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      setImageLoaded(true);
     };
 
     const vsSource = `
@@ -242,7 +182,6 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
         mat3 rotYaw = mat3(cy, 0.0, sy, 0.0, 1.0, 0.0, -sy, 0.0, cy);
 
         vec3 dir = rotYaw * rotPitch * ray;
-
         float longitude = atan(dir.x, dir.z);
         float latitude = asin(clamp(dir.y, -1.0, 1.0));
 
@@ -273,9 +212,7 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
       canvas.width = canvas.clientWidth;
       canvas.height = canvas.clientHeight;
       gl.viewport(0, 0, canvas.width, canvas.height);
-
       gl.useProgram(program);
-
       const posAttr = gl.getAttribLocation(program, 'a_position');
       gl.enableVertexAttribArray(posAttr);
       gl.vertexAttribPointer(posAttr, 2, gl.FLOAT, false, 0, 0);
@@ -305,16 +242,26 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full rounded-3xl overflow-hidden border border-emerald-500/30 bg-slate-950 select-none shadow-2xl ${
-        isFullscreen ? 'fixed inset-0 z-50 rounded-none h-screen' : 'h-[550px]'
+      className={`relative w-full overflow-hidden select-none \${
+        isFullscreen 
+          ? 'fixed inset-0 z-50 rounded-none h-screen bg-[#050505]' 
+          : 'h-[550px] bg-[#050505]'
       }`}
     >
+      {/* ── LOADER SHIMMER ────────────────────────────────────── */}
+      {!imageLoaded && (
+        <div className="absolute inset-0 skeleton-shimmer z-0 flex flex-col items-center justify-center gap-4">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="text-[10px] font-mono text-emerald-400 uppercase tracking-[0.2em] animate-pulse">
+            Cargando Textura 8K...
+          </div>
+        </div>
+      )}
+
+      {/* ── WEBGL CANVAS ────────────────────────────────────── */}
       <canvas
         ref={canvasRef}
-        onPointerDown={(e) => {
-          setIsDragging(true);
-          setDragStart({ x: e.clientX, y: e.clientY });
-        }}
+        onPointerDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX, y: e.clientY }); }}
         onPointerMove={(e) => {
           if (!isDragging) return;
           const dx = e.clientX - dragStart.x;
@@ -324,50 +271,86 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
           setPitch(prev => Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, prev - dy * 0.004)));
         }}
         onPointerUp={() => setIsDragging(false)}
-        className="w-full h-full cursor-grab active:cursor-grabbing block"
+        className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing z-10"
       />
 
-      <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none z-20">
-        <div className="flex items-center gap-2 pointer-events-auto bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-xs font-mono text-emerald-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-semibold">{tour.title}</span>
-          <span className="text-white/50">| {currentScene.title}</span>
+      {/* Crosshair (subtle) */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10">
+        <div className="w-1.5 h-1.5 rounded-full bg-white/50" />
+      </div>
+
+      {/* ── TOP HUD ─────────────────────────────────────────── */}
+      <div className="absolute top-4 left-4 right-4 flex items-start justify-between pointer-events-none z-20">
+        <div 
+          className="flex flex-col gap-1 pointer-events-auto px-4 py-2 rounded-2xl backdrop-blur-xl"
+          style={{ background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+        >
+          <div className="flex items-center gap-2 text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            {tour.title}
+          </div>
+          <div className="text-sm font-display font-bold text-white">
+            {currentScene.title}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 pointer-events-auto">
+          {/* Quality Selector */}
           <select 
             value={quality}
             onChange={(e) => setQuality(e.target.value as any)}
-            className="bg-slate-900/80 text-white text-xs rounded-xl px-2.5 py-1.5 border border-white/10 backdrop-blur-md cursor-pointer outline-none"
+            className="text-[11px] font-mono rounded-full px-3 py-1.5 backdrop-blur-xl cursor-pointer outline-none transition-all"
+            style={{ background: 'rgba(0,0,0,0.65)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
-            <option value="auto">Calidad: Auto</option>
-            <option value="low">Baja (1080p)</option>
-            <option value="medium">Media (4K)</option>
-            <option value="high">Alta (8K)</option>
-            <option value="ultra">Ultra (DJI Raw)</option>
+            <option value="auto">Auto</option>
+            <option value="ultra">Ultra (8K)</option>
           </select>
 
+          {/* Gyro Toggle */}
           <button
             onClick={toggleGyroscope}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
-              gyroActive 
-                ? 'bg-emerald-500 text-black border-emerald-400 font-bold shadow-lg shadow-emerald-500/30' 
-                : 'bg-slate-900/80 text-white border-white/10 hover:border-emerald-500'
-            }`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-mono transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+            style={gyroActive 
+              ? { background: '#10b981', color: '#000', fontWeight: 'bold', boxShadow: '0 0 20px rgba(16,185,129,0.4)' }
+              : { background: 'rgba(0,0,0,0.65)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)' }
+            }
           >
-            <Smartphone size={14} />
-            <span className="hidden sm:inline">{gyroActive ? 'Giroscopio ON' : 'Giroscopio'}</span>
+            <Smartphone size={13} />
+            <span className="hidden sm:inline">{gyroActive ? 'Gyro ON' : 'Activar Gyro'}</span>
           </button>
 
+          {/* Fullscreen Toggle */}
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-2 rounded-xl bg-slate-900/80 text-white border border-white/10 hover:border-white/30 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-all duration-500 hover:bg-white/10"
+            style={{ background: 'rgba(0,0,0,0.65)', color: 'rgba(255,255,255,0.7)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
-            <Maximize2 size={14} />
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </button>
         </div>
       </div>
 
+      {/* ── BOTTOM CONTROLS HUD ─────────────────────────────── */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+        <div 
+          className="pointer-events-auto flex items-center gap-1 p-1 rounded-full backdrop-blur-xl"
+          style={{ background: 'rgba(0,0,0,0.65)', border: '1px solid rgba(255,255,255,0.1)' }}
+        >
+          <button 
+            onClick={() => { setYaw(0); setPitch(0); setFov(75); }}
+            className="p-2 rounded-full hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+            title="Restablecer vista"
+          >
+            <RotateCcw size={16} />
+          </button>
+          <div className="w-px h-5 bg-white/10 mx-1" />
+          <div className="px-3 py-1 text-[10px] font-mono text-white/40">
+            Arrástralo para explorar
+          </div>
+        </div>
+      </div>
+
+      {/* ── RENDER HOTSPOTS ─────────────────────────────────── */}
       {currentScene.hotspots?.map((hp) => {
         const radYaw = yaw;
         const radPitch = pitch;
@@ -399,63 +382,116 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
                 setActiveModalHotspot(hp);
               }
             }}
-            style={{ left: `${x}px`, top: `${y}px` }}
-            className="absolute -translate-x-1/2 -translate-y-1/2 z-10 group"
+            style={{ left: `\${x}px`, top: `\${y}px` }}
+            className="absolute -translate-x-1/2 -translate-y-1/2 z-20 group"
           >
-            <div className={`p-2.5 rounded-full border-2 border-white shadow-xl transition-transform group-hover:scale-110 ${
-              hp.type === 'scene_link' 
-                ? 'bg-blue-600 animate-bounce' 
-                : 'bg-amber-500 shadow-amber-500/50'
-            }`}>
-              {hp.type === 'scene_link' ? <ChevronRight size={16} className="text-white" /> : <Info size={16} className="text-white" />}
+            {/* Magnetic Button Hover Physics container */}
+            <div className="relative group-hover:scale-105 group-active:scale-[0.95] transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]">
+              {/* Ripple ring for scene links */}
+              {hp.type === 'scene_link' && (
+                <div className="absolute inset-0 rounded-full border border-cyan-400 animate-ping opacity-50" />
+              )}
+              <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md shadow-2xl relative z-10"
+                style={hp.type === 'scene_link'
+                  ? { background: 'rgba(6,182,212,0.85)', border: '1px solid rgba(255,255,255,0.4)', color: '#fff' }
+                  : { background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(255,255,255,1)', color: '#050505' }
+                }
+              >
+                {hp.type === 'scene_link' ? <ChevronRight size={18} /> : <Info size={18} />}
+              </div>
             </div>
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-900/90 text-white text-xs px-2.5 py-1 rounded-md whitespace-nowrap border border-white/10 shadow-lg">
-              {hp.tooltip || hp.title || 'Ver detalles'}
+            
+            {/* Premium Tooltip */}
+            <div 
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            >
+              <div 
+                className="px-3 py-1.5 rounded-lg backdrop-blur-xl whitespace-nowrap text-[11px] font-mono font-bold text-white shadow-2xl"
+                style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.1)' }}
+              >
+                {hp.tooltip || hp.title || 'Ver detalles'}
+              </div>
             </div>
           </button>
         );
       })}
 
+      {/* ── INTERACTIVE INFO MODAL ───────────────────────────── */}
       {activeModalHotspot && (
-        <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 text-white relative shadow-2xl animate-in fade-in zoom-in-95">
-            <button 
-              onClick={() => setActiveModalHotspot(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center p-4">
+          <div 
+            className="w-full max-w-lg animate-in fade-in zoom-in-95 duration-500"
+            style={{
+              padding: '6px',
+              borderRadius: '2rem',
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '0 32px 80px -20px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.02)',
+            }}
+          >
+            <div 
+              className="relative flex flex-col p-6 sm:p-8"
+              style={{
+                borderRadius: 'calc(2rem - 6px)',
+                background: 'linear-gradient(160deg, rgba(14,20,32,0.95) 0%, rgba(8,11,18,0.98) 100%)',
+                boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.08)',
+              }}
             >
-              <X size={20} />
-            </button>
-
-            <h3 className="text-lg font-bold text-emerald-400 mb-2">
-              {activeModalHotspot.title || 'Punto de Interés'}
-            </h3>
-            <p className="text-sm text-slate-300 leading-relaxed mb-4">
-              {activeModalHotspot.description}
-            </p>
-
-            {activeModalHotspot.youtube_video_id && (
-              <div className="relative w-full aspect-video rounded-xl overflow-hidden mb-4 bg-black border border-white/10">
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${activeModalHotspot.youtube_video_id}?autoplay=1&enablejsapi=1`}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  title="Video 360"
-                />
-              </div>
-            )}
-
-            {activeModalHotspot.drive_url && (
-              <a
-                href={activeModalHotspot.drive_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-md"
+              <button 
+                onClick={() => setActiveModalHotspot(null)}
+                className="absolute top-5 right-5 p-2 rounded-full bg-white/5 text-white/50 hover:text-white hover:bg-white/10 transition-all hover:rotate-90 duration-500"
               >
-                <ExternalLink size={14} />
-                <span>{activeModalHotspot.drive_label || 'Abrir en Google Drive'}</span>
-              </a>
-            )}
+                <X size={16} />
+              </button>
+
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 mb-4 rounded-full text-[10px] font-mono font-bold uppercase w-fit"
+                   style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399', border: '1px solid rgba(16,185,129,0.2)' }}>
+                Información del Punto
+              </div>
+              
+              <h3 className="text-xl font-display font-bold text-white mb-2 leading-tight">
+                {activeModalHotspot.title || 'Punto de Interés'}
+              </h3>
+              <p className="text-[11px] font-mono text-white/50 leading-relaxed mb-6">
+                {activeModalHotspot.description}
+              </p>
+
+              {activeModalHotspot.youtube_video_id && (
+                <div 
+                  className="relative w-full aspect-video rounded-xl overflow-hidden mb-5 bg-black"
+                  style={{ border: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/\${activeModalHotspot.youtube_video_id}?autoplay=1&enablejsapi=1`}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="Video 360"
+                  />
+                </div>
+              )}
+
+              {activeModalHotspot.drive_url && (
+                <a
+                  href={activeModalHotspot.drive_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-center justify-between w-full p-4 rounded-xl transition-all duration-500"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                      <ExternalLink size={14} />
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-white/80 group-hover:text-white">
+                      {activeModalHotspot.drive_label || 'Abrir en Google Drive'}
+                    </span>
+                  </div>
+                  <ChevronRight size={14} className="text-white/30 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                </a>
+              )}
+            </div>
           </div>
         </div>
       )}
