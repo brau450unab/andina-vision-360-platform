@@ -1,0 +1,13 @@
+{
+  "name": "@andina/viewer-sdk",
+  "version": "1.0.0",
+  "description": "SDK y Motor de visualización 360° adaptable para drones con soporte de giroscopio y multirresolución",
+  "main": "src/viewer.js",
+  "type": "module",
+  "scripts": {
+    "build": "echo 'SDK listo para empaquetado'"
+  },
+  "keywords": ["360", "panorama", "virtual-tour", "drone", "webgl", "gyroscope", "pannellum", "marzipano"],
+  "author": "Andina Vision",
+  "license": "MIT"
+}
