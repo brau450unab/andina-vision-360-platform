@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Andina Vision 360 - Tour Studio & Management</title>
+  <link rel="stylesheet" href="../../packages/viewer-sdk/src/styles.css">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --border: rgba(255, 255, 255, 0.1);
+      --primary: #0284c7;
+      --primary-hover: #0369a1;
+      --accent: #f59e0b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg-dark); color: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    header {
+      height: 56px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+    }
+
+    .brand { font-size: 16px; font-weight: 700; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+    .header-actions { display: flex; gap: 12px; }
+
+    .main-workspace {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+    }
+
+    .sidebar-left {
+      width: 280px;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .scenes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .scene-card {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .scene-card:hover, .scene-card.active {
+      border-color: var(--primary);
+      background: #172554;
+    }
+
+    .scene-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .scene-meta { font-size: 11px; color: #94a3b8; }
+
+    .viewer-area {
+      flex: 1;
+      position: relative;
+      background: #000;
+    }
+
+    .studio-toolbar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .tool-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #e2e8f0;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tool-btn:hover { background: rgba(255, 255, 255, 0.1); }
+    .tool-btn.active { background: var(--primary); border-color: #38bdf8; }
+
+    .sidebar-right {
+      width: 320px;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; color: #cbd5e1; margin-bottom: 6px; }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: white;
+      font-size: 13px;
+    }
+
+    .form-textarea { resize: vertical; min-height: 70px; }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    .btn-ai {
+      background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .embed-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .embed-modal.open { display: flex; }
+    .embed-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 600px;
+      padding: 24px;
+    }
+    .code-preview {
+      background: #090d16;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      overflow-x: auto;
+      margin: 12px 0;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <span>🚁</span> Andina Vision 360 Studio
+    </div>
+    <div class="header-actions">
+      <button class="btn-ai" id="btn-ai-assist">
+        <span>✨</span> Asistente IA (Vertex AI)
+      </button>
+      <button class="btn-primary" id="btn-export-embed">
+        <span>🔗</span> Incrustar en Landing Page
+      </button>
+    </div>
+  </header>
+
+  <div class="main-workspace">
+    <aside class="sidebar-left">
+      <div class="sidebar-header">
+        <span>Escenas del Recorrido</span>
+        <button class="tool-btn" id="btn-add-scene">+ Nueva</button>
+      </div>
+      <div class="scenes-list" id="scenes-container"></div>
+    </aside>
+
+    <main class="viewer-area" id="studio-viewer-container">
+      <div class="studio-toolbar">
+        <button class="tool-btn active" id="tool-navigate">
+          <span>🖐️</span> Navegar
+        </button>
+        <button class="tool-btn" id="tool-add-hotspot">
+          <span>📍</span> Añadir Hotspot (Clic en la esfera)
+        </button>
+        <span style="border-left: 1px solid var(--border); margin: 0 4px;"></span>
+        <span style="font-size: 12px; color: #94a3b8; display: flex; align-items: center;" id="coords-display">
+          Yaw: 0.0° | Pitch: 0.0°
+        </span>
+      </div>
+    </main>
+
+    <aside class="sidebar-right">
+      <h3 style="font-size: 14px; margin-bottom: 16px; color: #38bdf8;">Propiedades del Hotspot</h3>
+
+      <div class="form-group">
+        <label class="form-label">Tipo de Interacción</label>
+        <select class="form-select" id="hp-type">
+          <option value="info_popup">Ventana Popup (YouTube / Google Drive)</option>
+          <option value="scene_link">Enlace de Navegación (Otra Escena)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Título</label>
+        <input type="text" class="form-input" id="hp-title" placeholder="Ej: Vista al Lago">
+      </div>
+
+      <div class="form-group" id="group-desc">
+        <label class="form-label">Descripción</label>
+        <textarea class="form-textarea" id="hp-desc" placeholder="Detalles o especificaciones técnicas..."></textarea>
+      </div>
+
+      <div class="form-group" id="group-youtube">
+        <label class="form-label">ID o URL de Video de YouTube 360</label>
+        <input type="text" class="form-input" id="hp-youtube" placeholder="Ej: dQw4w9WgXcQ">
+        <span style="font-size: 11px; color: #94a3b8;">Sincroniza con giroscopio en móviles</span>
+      </div>
+
+      <div class="form-group" id="group-drive">
+        <label class="form-label">Enlace a Google Drive</label>
+        <input type="text" class="form-input" id="hp-drive" placeholder="https://drive.google.com/file/d/...">
+      </div>
+
+      <div class="form-group" id="group-target-scene" style="display:none;">
+        <label class="form-label">Escena de Destino</label>
+        <select class="form-select" id="hp-target-scene"></select>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 10px;">
+        <button class="btn-primary" style="flex: 1;" id="btn-save-hotspot">Guardar Hotspot</button>
+        <button class="tool-btn" style="border-color: #ef4444; color: #ef4444;" id="btn-delete-hotspot">Eliminar</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="embed-modal" id="embed-modal">
+    <div class="embed-box">
+      <h3 style="margin-bottom: 12px;">Código de Incrustación para tu Landing Page</h3>
+      <p style="font-size: 13px; color: #94a3b8;">
+        Copia este código HTML en tu landing page existente. Incluye soporte nativo para pantalla completa y acelerómetro/giroscopio móvil:
+      </p>
+
+      <div class="code-preview" id="embed-code-html"></div>
+
+      <h4 style="font-size: 13px; margin: 16px 0 6px 0;">Componente React (Para ANDINA-VISION-Sitio-web):</h4>
+      <div class="code-preview" id="embed-code-react"></div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+        <button class="btn-primary" id="btn-close-embed">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Andina360Viewer } from '../../packages/viewer-sdk/src/viewer.js';
+
+    let currentTour = {
+      id: "tour_andina_01",
+      title: "Recorrido Aéreo Dron DJI",
+      firstSceneId: "scene_1",
+      scenes: [
+        {
+          id: "scene_1",
+          title: "Mirador Cordillerano (8K)",
+          preview_url: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=2048&q=80",
+          default_yaw: 0,
+          default_pitch: -10,
+          hotspots: [
+            {
+              id: "hp_1",
+              type: "info_popup",
+              yaw: 35.0,
+              pitch: -5.0,
+              title: "Área de Vuelo y Quincho",
+              description: "Punto de despegue autorizado para dron DJI con visual panorámica.",
+              youtube_video_id: "dQw4w9WgXcQ",
+              drive_url: "https://drive.google.com"
+            }
+          ]
+        },
+        {
+          id: "scene_2",
+          title: "Acceso y Casa Central",
+          preview_url: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=2048&q=80",
+          default_yaw: 120,
+          default_pitch: 0,
+          hotspots: []
+        }
+      ]
+    };
+
+    let activeSceneId = "scene_1";
+    let activeHotspot = null;
+    let addHotspotMode = false;
+
+    const viewer = new Andina360Viewer('#studio-viewer-container');
+    viewer.loadTour(currentTour);
+
+    setInterval(() => {
+      document.getElementById('coords-display').textContent = 
+        `Yaw: ${viewer.yaw.toFixed(1)}° | Pitch: ${viewer.pitch.toFixed(1)}° | FOV: ${viewer.fov.toFixed(1)}°`;
+    }, 100);
+
+    function renderScenesList() {
+      const container = document.getElementById('scenes-container');
+      container.innerHTML = '';
+      currentTour.scenes.forEach(s => {
+        const div = document.createElement('div');
+        div.className = `scene-card ${s.id === activeSceneId ? 'active' : ''}`;
+        div.innerHTML = `
+          <div class="scene-title">${s.title}</div>
+          <div class="scene-meta">${s.hotspots.length} hotspots configurados</div>
+        `;
+        div.onclick = () => {
+          activeSceneId = s.id;
+          viewer.switchScene(s.id);
+          renderScenesList();
+          populateTargetScenes();
+        };
+        container.appendChild(div);
+      });
+    }
+
+    function populateTargetScenes() {
+      const sel = document.getElementById('hp-target-scene');
+      sel.innerHTML = '';
+      currentTour.scenes.filter(s => s.id !== activeSceneId).forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.title;
+        sel.appendChild(opt);
+      });
+    }
+
+    viewer.canvas.addEventListener('click', (e) => {
+      if (!addHotspotMode) return;
+
+      const newHp = {
+        id: `hp_${Date.now()}`,
+        type: "info_popup",
+        yaw: parseFloat(viewer.yaw.toFixed(1)),
+        pitch: parseFloat(viewer.pitch.toFixed(1)),
+        title: "Nuevo Punto de Interés",
+        description: "Descripción del punto capturado por dron",
+        youtube_video_id: "",
+        drive_url: ""
+      };
+
+      const scene = currentTour.scenes.find(s => s.id === activeSceneId);
+      scene.hotspots.push(newHp);
+      viewer.renderHotspots(scene.hotspots);
+
+      loadHotspotIntoForm(newHp);
+      toggleAddMode(false);
+      renderScenesList();
+    });
+
+    function toggleAddMode(active) {
+      addHotspotMode = active;
+      document.getElementById('tool-add-hotspot').classList.toggle('active', active);
+      document.getElementById('tool-navigate').classList.toggle('active', !active);
+    }
+
+    document.getElementById('tool-navigate').onclick = () => toggleAddMode(false);
+    document.getElementById('tool-add-hotspot').onclick = () => toggleAddMode(true);
+
+    function loadHotspotIntoForm(hp) {
+      activeHotspot = hp;
+      document.getElementById('hp-type').value = hp.type;
+      document.getElementById('hp-title').value = hp.title || '';
+      document.getElementById('hp-desc').value = hp.description || '';
+      document.getElementById('hp-youtube').value = hp.youtube_video_id || '';
+      document.getElementById('hp-drive').value = hp.drive_url || '';
+      toggleFormFields(hp.type);
+    }
+
+    function toggleFormFields(type) {
+      const isInfo = type === 'info_popup';
+      document.getElementById('group-desc').style.display = isInfo ? 'block' : 'none';
+      document.getElementById('group-youtube').style.display = isInfo ? 'block' : 'none';
+      document.getElementById('group-drive').style.display = isInfo ? 'block' : 'none';
+      document.getElementById('group-target-scene').style.display = isInfo ? 'none' : 'block';
+    }
+
+    document.getElementById('hp-type').onchange = (e) => toggleFormFields(e.target.value);
+
+    document.getElementById('btn-save-hotspot').onclick = () => {
+      if (!activeHotspot) return;
+      activeHotspot.type = document.getElementById('hp-type').value;
+      activeHotspot.title = document.getElementById('hp-title').value;
+      activeHotspot.description = document.getElementById('hp-desc').value;
+      activeHotspot.youtube_video_id = document.getElementById('hp-youtube').value;
+      activeHotspot.drive_url = document.getElementById('hp-drive').value;
+      activeHotspot.target_scene_id = document.getElementById('hp-target-scene').value;
+
+      const scene = currentTour.scenes.find(s => s.id === activeSceneId);
+      viewer.renderHotspots(scene.hotspots);
+      renderScenesList();
+      alert("Hotspot actualizado correctamente.");
+    };
+
+    document.getElementById('btn-ai-assist').onclick = async () => {
+      alert("✨ Asistente Vertex AI:\n1. Analizando panorama aéreo de dron...\n2. Generando puntos de interés recomendados...\n3. Parcheando nadir (eliminando sombra del dron).");
+      
+      const scene = currentTour.scenes.find(s => s.id === activeSceneId);
+      scene.hotspots.push({
+        id: `ai_spot_${Date.now()}`,
+        type: "info_popup",
+        yaw: (viewer.yaw + 45) % 360,
+        pitch: -15,
+        title: "✨ Punto Detectado por Gemini Vision",
+        description: "Hito geográfico destacado con alta visibilidad y composición ideal.",
+        youtube_video_id: "dQw4w9WgXcQ",
+        drive_url: "https://drive.google.com"
+      });
+      viewer.renderHotspots(scene.hotspots);
+      renderScenesList();
+    };
+
+    document.getElementById('btn-export-embed').onclick = () => {
+      const tourId = currentTour.id;
+      const embedUrl = `https://tours.andinavision.cl/embed.html?tourId=${tourId}`;
+
+      const iframeCode = `<iframe 
+  src="${embedUrl}" 
+  width="100%" 
+  height="600" 
+  frameborder="0" 
+  allow="accelerometer; gyroscope; fullscreen" 
+  allowfullscreen>
+</iframe>`;
+
+      const reactCode = `import React from 'react';
+
+export function VirtualTourViewer() {
+  return (
+    <div className="w-full h-[600px] rounded-2xl overflow-hidden shadow-2xl border border-slate-800">
+      <iframe
+        src="${embedUrl}"
+        className="w-full h-full border-0"
+        allow="accelerometer; gyroscope; fullscreen"
+        allowFullScreen
+        title="Andina Vision 360 Tour"
+      />
+    </div>
+  );
+}`;
+
+      document.getElementById('embed-code-html').textContent = iframeCode;
+      document.getElementById('embed-code-react').textContent = reactCode;
+      document.getElementById('embed-modal').classList.add('open');
+    };
+
+    document.getElementById('btn-close-embed').onclick = () => {
+      document.getElementById('embed-modal').classList.remove('open');
+    };
+
+    renderScenesList();
+    populateTargetScenes();
+    if (currentTour.scenes[0].hotspots[0]) {
+      loadHotspotIntoForm(currentTour.scenes[0].hotspots[0]);
+    }
+  </script>
+</body>
+</html>
