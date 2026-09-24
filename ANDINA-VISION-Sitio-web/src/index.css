@@ -1,0 +1,255 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Syne:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Syne", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Plus Jakarta Sans", sans-serif;
+  --font-mono: "Space Grotesk", monospace;
+
+  --color-bg: #070a0f;
+  --color-surface: #0e131d;
+  --color-surface-container: #141b29;
+  --color-surface-high: #1c2638;
+  --color-surface-highest: #26334a;
+  
+  /* Pilar 1: Cinematografía y Marketing (Azules Metálicos) */
+  --color-primary: #a4c9ff;
+  --color-primary-container: #00396a;
+  --color-cinema-cyan: #38bdf8;
+  --color-cinema-blue: #2563eb;
+  
+  /* Pilar 2: Tours 360°, Software Inmobiliario (Verdes Metálicos) */
+  --color-emerald-green: #10b981;
+  --color-emerald-glow: #34d399;
+  --color-emerald-surface: #0a1c17;
+  --color-emerald-container: #102e26;
+  --color-emerald-dark: #064e3b;
+
+  /* Pilar 3: Vuelos de Drone (Cobre / Oro Metálico) */
+  --color-copper-gold: #f59e0b;
+  --color-copper-glow: #fbbf24;
+  --color-copper-surface: #201608;
+  --color-copper-container: #33220c;
+  --color-copper-dark: #78350f;
+
+  /* Pilar 4: Industrial y Minería (Rojos Metálicos) */
+  --color-industrial-red: #ef4444;
+  --color-industrial-crimson: #dc2626;
+  --color-industrial-darkred: #991b1b;
+  --color-industrial-deep: #450a0a;
+  --color-industrial-surface: #1a0f0f;
+  --color-industrial-container: #261414;
+  --color-industrial-high: #381a1a;
+
+  /* Detalles Ámbar / Sol */
+  --color-secondary: #ffb877;
+  --color-tertiary: #f3bf32;
+
+  --color-on-surface: #dfe2eb;
+  --color-on-surface-variant: #c3c7ce;
+  --color-outline: #3b424e;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-on-surface font-sans selection:bg-primary selection:text-primary-container;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+}
+
+/* Background Subtle Dot Matrix Grid */
+.bg-dot-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Double-Bezel (Doppelrand) Architecture for Agency-Tier Hardware Finish */
+.double-bezel-outer {
+  padding: 6px;
+  border-radius: 2rem;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: 0 20px 50px -15px rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.double-bezel-inner {
+  border-radius: calc(2rem - 6px);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.glass-card {
+  background: rgba(20, 27, 41, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-panel {
+  background: rgba(28, 38, 56, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Metallic Blue Card (Pilar 1) */
+.metallic-blue-card {
+  background: linear-gradient(135deg, rgba(16, 26, 44, 0.85) 0%, rgba(10, 16, 28, 0.95) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(56, 189, 248, 0.2);
+}
+.metallic-blue-card:hover {
+  border-color: rgba(56, 189, 248, 0.75);
+  box-shadow: 0 15px 45px -10px rgba(56, 189, 248, 0.4);
+}
+
+/* Emerald Green Metallic Card (Pilar 2) */
+.emerald-card {
+  background: linear-gradient(135deg, rgba(10, 28, 23, 0.85) 0%, rgba(6, 18, 15, 0.95) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(16, 185, 129, 0.2);
+}
+.emerald-card:hover {
+  border-color: rgba(16, 185, 129, 0.75);
+  box-shadow: 0 15px 45px -10px rgba(16, 185, 129, 0.4);
+}
+
+/* Copper Gold Metallic Card (Pilar 3) */
+.copper-card {
+  background: linear-gradient(135deg, rgba(32, 22, 8, 0.85) 0%, rgba(20, 13, 5, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.2);
+}
+.copper-card:hover {
+  border-color: rgba(245, 158, 11, 0.75);
+  box-shadow: 0 15px 45px -10px rgba(245, 158, 11, 0.4);
+}
+
+/* Industrial Red Metallic Card (Pilar 4) */
+.industrial-card {
+  background: linear-gradient(135deg, rgba(38, 20, 20, 0.85) 0%, rgba(26, 15, 15, 0.95) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 10px 30px -10px rgba(239, 68, 68, 0.2);
+}
+.industrial-card:hover {
+  border-color: rgba(239, 68, 68, 0.75);
+  box-shadow: 0 15px 45px -10px rgba(239, 68, 68, 0.4);
+}
+
+.hud-border {
+  border: 1px solid rgba(164, 201, 255, 0.2);
+}
+
+/* Shimmer and Moving scanlines for Hover GIF Preview */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+.animate-scanline {
+  animation: scanline 2.5s linear infinite;
+}
+
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.pulse-ring {
+  animation: pulse-ring 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── PLATFORM 360 PREMIUM TOKENS ─────────────────────────── */
+
+/* Fixed grain overlay — pointer-events-none so it never blocks clicks */
+.grain-overlay::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  opacity: 0.028;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+/* Floating island nav pill */
+.nav-pill {
+  position: sticky;
+  top: 1.25rem;
+  z-index: 40;
+  margin: 1.25rem auto 0;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  border-radius: 9999px;
+  background: rgba(14, 19, 29, 0.72);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.09);
+  box-shadow: 0 8px 32px -8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
+  padding: 0.35rem;
+  transition: all 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Orbital mesh gradient glow — behind the hero canvas */
+.orbital-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(80px);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+@keyframes drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(40px, -30px) scale(1.08); }
+  66%  { transform: translate(-25px, 20px) scale(0.95); }
+}
+@keyframes drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40%  { transform: translate(-50px, 35px) scale(1.1); }
+  80%  { transform: translate(30px, -20px) scale(0.92); }
+}
+.orbital-glow-a { animation: drift-a 18s ease-in-out infinite; }
+.orbital-glow-b { animation: drift-b 22s ease-in-out infinite; }
+
+/* Shimmer skeleton loader for WebGL canvas */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.09) 50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 600px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Thumbnail cards — equirectangular safe 2:1 container */
+.pano-thumb-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border-radius: inherit;
+  background: #070a0f;
+}
+.pano-thumb-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 0.7s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.pano-thumb-container:hover img {
+  transform: scale(1.04);
+}
