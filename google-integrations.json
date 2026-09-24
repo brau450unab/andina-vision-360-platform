@@ -1,0 +1,53 @@
+{
+  "platform": "Andina Vision 360",
+  "version": "1.0.0",
+  "integrations": {
+    "github": {
+      "repository": "https://github.com/brau450unab/andina-vision-360-platform",
+      "owner": "brau450unab",
+      "name": "andina-vision-360-platform",
+      "default_branch": "main"
+    },
+    "google_stitch": {
+      "project_name": "projects/3693078872688806056",
+      "project_title": "Remix of Landing Page: Productora Audiovisual Northern Chile",
+      "design_system": "The Andean Horizon",
+      "color_mode": "DARK",
+      "primary_color": "#a4c9ff",
+      "secondary_color": "#ffb877",
+      "sync_enabled": true
+    },
+    "google_ai_studio": {
+      "models": [
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "imagen-3.0-generate-002"
+      ],
+      "capabilities": [
+        "multimodal-spatial-hotspots",
+        "nadir-generative-inpainting",
+        "auto-tagging"
+      ]
+    },
+    "google_cloud": {
+      "services": [
+        "Cloud Run (API & Frontend)",
+        "Cloud Run Jobs (Image Tiler & Hugin Nona)",
+        "Cloud Storage (Raw & Tiles)",
+        "Cloud Firestore Native",
+        "Cloud CDN",
+        "Secret Manager",
+        "Cloud Build"
+      ]
+    },
+    "skills_backup": [
+      ".agents/skills/3d-web-experience",
+      ".agents/skills/frontend-design",
+      ".agents/skills/high-end-visual-design",
+      ".agents/skills/interactive-portfolio",
+      ".agents/skills/magnific-ai",
+      ".agents/skills/scroll-experience",
+      ".agents/skills/ui-ux-pro-max"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "Andina Vision 360 Platform - Cloud Dev Environment",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    },
+    "ghcr.io/devcontainers/features/google-cloud-sdk:0": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-python.python",
+        "googlecloudtools.cloudcode",
+        "hashicorp.terraform"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "postCreateCommand": "cd ANDINA-VISION-Sitio-web && npm install",
+  "forwardPorts": [3005, 8080]
+}

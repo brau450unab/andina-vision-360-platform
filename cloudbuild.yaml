@@ -1,0 +1,54 @@
+steps:
+  # 1. Instalar dependencias y compilar la Landing Page y Visor 360
+  - name: 'node:20'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        cd ANDINA-VISION-Sitio-web
+        npm ci
+        npm run build
+
+  # 2. Construir imagen Docker para el backend API de Tours 360
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/andina-360-containers/api:$COMMIT_SHA'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/andina-360-containers/api:latest'
+      - './andina-360-engine/services/api'
+
+  # 3. Construir imagen Docker para el Procesador de Panorámicas de Dron (Cloud Run Job)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/andina-360-containers/processor:$COMMIT_SHA'
+      - '-t'
+      - '$_REGION-docker.pkg.dev/$PROJECT_ID/andina-360-containers/processor:latest'
+      - './andina-360-engine/services/processor'
+
+  # 4. Pushear imágenes al Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/andina-360-containers/api:$COMMIT_SHA']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '$_REGION-docker.pkg.dev/$PROJECT_ID/andina-360-containers/processor:$COMMIT_SHA']
+
+  # 5. Desplegar Cloud Run API Service
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'andina-360-api'
+      - '--image=$_REGION-docker.pkg.dev/$PROJECT_ID/andina-360-containers/api:$COMMIT_SHA'
+      - '--region=$_REGION'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+substitutions:
+  _REGION: 'us-central1'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
