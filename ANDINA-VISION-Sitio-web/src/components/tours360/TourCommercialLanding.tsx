@@ -1,122 +1,343 @@
-import React, { useState } from 'react';
-import { 
-  Sparkles, 
-  Layers, 
-  Smartphone, 
-  Cpu, 
-  Cloud, 
-  CheckCircle2, 
-  ArrowRight, 
-  ExternalLink, 
-  ShieldCheck, 
-  Wand2, 
-  Zap, 
-  Eye, 
-  Play, 
-  Compass, 
-  Share2, 
-  ChevronRight,
-  Maximize2
-} from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Layers, Smartphone, Wand2, ArrowRight, CheckCircle2, Eye, Sparkles, Zap, Shield } from 'lucide-react';
 import { DynamicCloudTourViewer } from '../DynamicCloudTourViewer';
-import { REAL_PANORAMAS, INITIAL_DEPARTMENT_TOUR } from './panoramasData';
+import { INITIAL_DEPARTMENT_TOUR } from './panoramasData';
 
 interface TourCommercialLandingProps {
   onNavigateToLibrary: () => void;
   onNavigateToStudio: () => void;
 }
 
+// ── Reveal-on-scroll hook ──────────────────────────────────
+function useReveal() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { threshold: 0.12 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  return { ref, visible };
+}
+
+// ── Stat card ─────────────────────────────────────────────
+function StatCard({ val, label, desc, delay }: { val: string; label: string; desc: string; delay: number }) {
+  const { ref, visible } = useReveal();
+  return (
+    <div
+      ref={ref}
+      className="reveal-entry"
+      style={{ transitionDelay: `${delay}ms`, ...(visible ? { opacity: 1, transform: 'translateY(0)' } : {}) }}
+    >
+      {/* Double-bezel stat card */}
+      <div
+        className="h-full"
+        style={{
+          padding: '4px',
+          borderRadius: '1.25rem',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          boxShadow: '0 20px 40px -15px rgba(0,0,0,0.7)',
+        }}
+      >
+        <div
+          className="h-full p-5 flex flex-col gap-1"
+          style={{
+            borderRadius: 'calc(1.25rem - 4px)',
+            background: 'linear-gradient(160deg, rgba(20,27,41,0.9) 0%, rgba(10,14,22,0.95) 100%)',
+            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.08)',
+          }}
+        >
+          <div className="text-emerald-400 font-display font-black text-xl">{val}</div>
+          <div className="text-white text-xs font-display font-semibold">{label}</div>
+          <div className="text-white/35 text-[11px] font-mono leading-relaxed">{desc}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Feature pillar card ────────────────────────────────────
+function FeaturePillar({
+  icon: Icon, title, body, items, accentColor, delay,
+}: {
+  icon: React.ElementType;
+  title: string;
+  body: string;
+  items: string[];
+  accentColor: string;
+  delay: number;
+}) {
+  const { ref, visible } = useReveal();
+  return (
+    <div
+      ref={ref}
+      className="reveal-entry"
+      style={{ transitionDelay: `${delay}ms`, ...(visible ? { opacity: 1, transform: 'translateY(0)' } : {}) }}
+    >
+      <div
+        className="h-full group"
+        style={{
+          padding: '5px',
+          borderRadius: '1.75rem',
+          background: 'rgba(255,255,255,0.025)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: '0 24px 50px -18px rgba(0,0,0,0.8)',
+          transition: 'all 0.6s cubic-bezier(0.32,0.72,0,1)',
+        }}
+      >
+        <div
+          className="h-full flex flex-col p-6 sm:p-8"
+          style={{
+            borderRadius: 'calc(1.75rem - 5px)',
+            background: 'linear-gradient(160deg, rgba(14,20,32,0.92) 0%, rgba(8,11,18,0.98) 100%)',
+            boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.07)',
+          }}
+        >
+          {/* Icon badge */}
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center mb-6 shrink-0"
+            style={{
+              background: `${accentColor}18`,
+              border: `1px solid ${accentColor}30`,
+              boxShadow: `0 8px 24px -8px ${accentColor}22`,
+            }}
+          >
+            <Icon size={20} style={{ color: accentColor }} />
+          </div>
+
+          {/* Eyebrow */}
+          <div
+            className="inline-flex w-fit items-center px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.18em] mb-3"
+            style={{
+              color: accentColor,
+              background: `${accentColor}14`,
+              border: `1px solid ${accentColor}25`,
+            }}
+          >
+            Motor Cloud
+          </div>
+
+          <h3 className="text-lg font-display font-bold text-white uppercase leading-tight mb-3">{title}</h3>
+          <p className="text-white/40 text-xs font-mono leading-relaxed flex-1 mb-6">{body}</p>
+
+          <ul className="space-y-2.5 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            {items.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs font-mono text-white/55">
+                <CheckCircle2 size={13} style={{ color: accentColor, marginTop: 1, flexShrink: 0 }} />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Comparison table ───────────────────────────────────────
+const ROWS = [
+  { label: 'Propiedad de archivos',   neg: 'Servidores opacos del proveedor',          pos: 'Tu propio Google Cloud Storage' },
+  { label: 'Costo mensual',           neg: '$30 – $150 USD/mes o marcas de agua',      pos: 'Costo real en GCP (< $5/mes)' },
+  { label: 'Resolución móvil',        neg: 'Comprimen y degradan la foto a 4K',        pos: '8K – 12K con pirámides multirres.' },
+  { label: 'Inteligencia Artificial', neg: 'Inexistente o cobrada por crédito extra',  pos: 'Vertex AI (Imagen 3 & Gemini Vision)' },
+];
+
 export const TourCommercialLanding: React.FC<TourCommercialLandingProps> = ({
   onNavigateToLibrary,
-  onNavigateToStudio
+  onNavigateToStudio,
 }) => {
+  const heroReveal = useReveal();
+  const viewerReveal = useReveal();
+
   return (
-    <div className="w-full bg-slate-950 text-slate-100 overflow-hidden">
-      
-      {/* 1. HERO SECTION: Impacto Visual y Demostración en Vivo */}
-      <section className="relative pt-12 pb-24 px-4 sm:px-6 lg:px-12 border-b border-slate-900 bg-gradient-to-b from-slate-900/60 via-slate-950 to-slate-950">
+    <div className="w-full text-white overflow-hidden" style={{ background: 'transparent' }}>
+
+      {/* ══════════════════════════════════════════
+          1. HERO — Editorial Split with live 360
+         ══════════════════════════════════════════ */}
+      <section className="relative pt-24 pb-32 px-4 sm:px-6 lg:px-16 overflow-hidden">
+        {/* Section gradient */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(16,185,129,0.1) 0%, transparent 70%)',
+          }}
+        />
+
         <div className="max-w-7xl mx-auto">
-          
-          <div className="text-center max-w-3xl mx-auto mb-12">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold tracking-widest uppercase mb-4 shadow-lg shadow-emerald-500/10 animate-pulse">
-              <Sparkles size={14} />
-              <span>MOTOR ESPACIAL 360° & NUBE GOOGLE CLOUD</span>
+
+          {/* — Eyebrow + heading ——————————————————— */}
+          <div
+            ref={heroReveal.ref}
+            className="reveal-entry text-center max-w-4xl mx-auto mb-16"
+            style={heroReveal.visible ? { opacity: 1, transform: 'translateY(0)' } : {}}
+          >
+            {/* Eyebrow badge */}
+            <div className="inline-flex items-center gap-2 mb-6">
+              <div
+                className="flex items-center gap-2 px-4 py-1.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.2em]"
+                style={{
+                  background: 'rgba(16,185,129,0.08)',
+                  border: '1px solid rgba(16,185,129,0.25)',
+                  color: '#34d399',
+                  boxShadow: '0 0 24px rgba(16,185,129,0.12)',
+                }}
+              >
+                <Sparkles size={11} />
+                Motor Espacial 360° · Google Cloud · WebGL
+              </div>
             </div>
-            
-            <h1 className="text-4xl sm:text-6xl font-display font-black tracking-tight text-white uppercase leading-none mb-6">
-              Plataforma de Tours Virtuales e Imágenes 360°
+
+            {/* Massive heading */}
+            <h1
+              className="font-display font-black uppercase leading-none tracking-tight mb-6"
+              style={{ fontSize: 'clamp(2.6rem, 7vw, 5.5rem)' }}
+            >
+              Plataforma de{' '}
+              <span
+                style={{
+                  background: 'linear-gradient(90deg, #10b981 0%, #06b6d4 50%, #818cf8 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}
+              >
+                Tours Virtuales
+              </span>{' '}
+              &amp; Imágenes{' '}
+              <span style={{ color: 'rgba(255,255,255,0.25)' }}>360°</span>
             </h1>
-            
-            <p className="text-slate-400 text-base sm:text-lg font-light leading-relaxed mb-8">
-              Visualiza capturas de drones y cámaras omnidireccionales en <strong>8K Gigapíxel</strong> con renderizado WebGL adaptable a 60 FPS, giroscopio móvil inmersivo y retoque fotográfico asistido por <strong>Inteligencia Artificial en Google Cloud</strong>.
+
+            <p className="text-white/45 text-sm sm:text-base font-mono leading-relaxed max-w-2xl mx-auto mb-10">
+              Visualiza capturas de drones y cámaras omnidireccionales en{' '}
+              <strong className="text-white/70">8K Gigapíxel</strong> con renderizado WebGL nativo a 60 FPS, giroscopio móvil inmersivo y retoque fotográfico asistido por{' '}
+              <strong className="text-white/70">Inteligencia Artificial en Google Cloud</strong>.
             </p>
 
-            <div className="flex flex-wrap items-center justify-center gap-4">
+            {/* CTAs */}
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {/* Primary button-in-button */}
               <button
                 onClick={onNavigateToStudio}
-                className="px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-emerald-500/25 flex items-center gap-2 hover:scale-105"
+                className="group flex items-center gap-3 pl-5 pr-2 py-2 rounded-full font-display font-black text-sm uppercase tracking-wider text-slate-950 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.97]"
+                style={{
+                  background: 'linear-gradient(135deg, #10b981 0%, #0ea5e9 100%)',
+                  boxShadow: '0 0 32px rgba(16,185,129,0.35)',
+                }}
               >
-                <span>Crear Nuevo Tour Virtual</span>
-                <ArrowRight size={16} />
+                <span>Crear Tour Virtual</span>
+                <span
+                  className="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-px group-hover:scale-105"
+                  style={{ background: 'rgba(0,0,0,0.15)' }}
+                >
+                  <ArrowRight size={15} />
+                </span>
               </button>
 
+              {/* Secondary */}
               <button
                 onClick={onNavigateToLibrary}
-                className="px-6 py-3.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center gap-2"
+                className="group flex items-center gap-2.5 px-5 py-3 rounded-full font-mono text-xs font-bold uppercase tracking-wider text-white/70 hover:text-white transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07)',
+                }}
               >
-                <Eye size={16} className="text-emerald-400" />
-                <span>Ver Biblioteca de Imágenes (5)</span>
+                <Eye size={14} className="text-emerald-400" />
+                Ver Biblioteca 360° (5 panorámicas)
               </button>
             </div>
           </div>
 
-          <div className="relative mt-8">
-            <div className="absolute -top-3 left-6 z-20 px-3 py-1 rounded-full bg-emerald-500 text-slate-950 font-mono font-black text-[10px] uppercase tracking-wider shadow-lg">
-              ● DEMO EN VIVO: DEPARTAMENTO EN CAVANCHA (8K HDR)
+          {/* — Live 360 Viewer (Double-Bezel) ———————————————— */}
+          <div
+            ref={viewerReveal.ref}
+            className="reveal-entry relative"
+            style={{
+              transitionDelay: '150ms',
+              ...(viewerReveal.visible ? { opacity: 1, transform: 'translateY(0)' } : {}),
+            }}
+          >
+            {/* Live badge */}
+            <div
+              className="absolute -top-3.5 left-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-mono font-black uppercase tracking-wider"
+              style={{
+                background: 'linear-gradient(90deg, #059669, #0e7490)',
+                boxShadow: '0 4px 20px rgba(16,185,129,0.4)',
+                color: '#fff',
+              }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              Demo en Vivo · Departamento Cavancha 8K HDR
             </div>
 
-            <DynamicCloudTourViewer 
-              tourId="tour_depto_cavancha"
-              fallbackTour={{
-                id: 'tour_depto_cavancha',
-                title: 'Departamento Vista Mar & Balcón - Cavancha 360°',
-                allow_gyroscope: true,
-                first_scene_id: 'pano_living_terraza',
-                scenes: INITIAL_DEPARTMENT_TOUR.map(s => ({
-                  id: s.id,
-                  title: s.title,
-                  preview_url: s.imageUrl,
-                  default_yaw: s.defaultYaw,
-                  default_pitch: s.defaultPitch,
-                  hotspots: s.hotspots.map(h => ({
-                    id: h.id,
-                    type: h.type,
-                    yaw: h.yaw,
-                    pitch: h.pitch,
-                    tooltip: h.tooltip,
-                    target_scene_id: h.targetSceneId,
-                    title: h.title,
-                    description: h.description,
-                    youtube_video_id: h.youtubeVideoId,
-                    drive_url: h.driveUrl,
-                    drive_label: h.driveLabel
-                  }))
-                }))
+            {/* Outer bezel shell */}
+            <div
+              style={{
+                padding: '6px',
+                borderRadius: '2rem',
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                boxShadow: '0 32px 80px -20px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.02)',
               }}
-            />
+            >
+              {/* Inner bezel core */}
+              <div
+                style={{
+                  borderRadius: 'calc(2rem - 6px)',
+                  overflow: 'hidden',
+                  boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1)',
+                }}
+              >
+                <DynamicCloudTourViewer
+                  tourId="tour_depto_cavancha"
+                  fallbackTour={{
+                    id: 'tour_depto_cavancha',
+                    title: 'Departamento Vista Mar & Balcón - Cavancha 360°',
+                    allow_gyroscope: true,
+                    first_scene_id: 'pano_living_terraza',
+                    scenes: INITIAL_DEPARTMENT_TOUR.map(s => ({
+                      id: s.id,
+                      title: s.title,
+                      preview_url: s.imageUrl,
+                      default_yaw: s.defaultYaw,
+                      default_pitch: s.defaultPitch,
+                      hotspots: s.hotspots.map(h => ({
+                        id: h.id,
+                        type: h.type,
+                        yaw: h.yaw,
+                        pitch: h.pitch,
+                        tooltip: h.tooltip,
+                        target_scene_id: h.targetSceneId,
+                        title: h.title,
+                        description: h.description,
+                        youtube_video_id: h.youtubeVideoId,
+                        drive_url: h.driveUrl,
+                        drive_label: h.driveLabel,
+                      })),
+                    })),
+                  }}
+                />
+              </div>
+            </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6">
-              {[
-                { label: 'Resolución Máxima', val: '8192 × 4096 px', desc: 'Sin pérdida de textura en zoom' },
-                { label: 'Tasa de Cuadros', val: '60 FPS Fluido', desc: 'WebGL nativo sin bibliotecas pesadas' },
-                { label: 'Soporte Móvil', val: 'iOS & Android', desc: 'Giroscopio y pirámides de mosaicos' },
-                { label: 'Infraestructura', val: 'Google Cloud Run', desc: 'Escalable a 0 con Cloud CDN' }
-              ].map((stat, idx) => (
-                <div key={idx} className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4">
-                  <div className="text-emerald-400 font-mono text-lg font-bold">{stat.val}</div>
-                  <div className="text-white text-xs font-semibold mt-0.5">{stat.label}</div>
-                  <div className="text-slate-500 text-[11px] font-light mt-0.5">{stat.desc}</div>
-                </div>
+            {/* Stats row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+              {([
+                { val: '8192 × 4096 px', label: 'Resolución Máxima',   desc: 'Sin pérdida de textura en zoom' },
+                { val: '60 FPS',          label: 'Tasa de Cuadros',     desc: 'WebGL nativo sin librerías pesadas' },
+                { val: 'iOS & Android',   label: 'Soporte Móvil',       desc: 'Giroscopio y pirámides de mosaicos' },
+                { val: 'Cloud Run',       label: 'Infraestructura GCP', desc: 'Escalable a 0 con Cloud CDN' },
+              ] as { val: string; label: string; desc: string }[]).map((s, i) => (
+                <StatCard key={i} delay={i * 60} {...s} />
               ))}
             </div>
           </div>
@@ -124,171 +345,234 @@ export const TourCommercialLanding: React.FC<TourCommercialLandingProps> = ({
         </div>
       </section>
 
-      {/* 2. PILARES TECNOLÓGICOS DEL MOTOR */}
-      <section className="py-24 px-4 sm:px-6 lg:px-12 bg-slate-950 border-b border-slate-900">
+      {/* ══════════════════════════════════════════
+          2. FEATURE PILLARS — Asymmetric Bento
+         ══════════════════════════════════════════ */}
+      <section className="py-32 px-4 sm:px-6 lg:px-16 relative">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+        />
+
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <span className="text-emerald-400 font-mono text-xs font-bold uppercase tracking-widest">
-              INGENIERÍA CLOUD-NATIVE
-            </span>
-            <h2 className="text-3xl sm:text-5xl font-display font-black text-white uppercase mt-2">
-              Funcionalidades Clave del Motor
-            </h2>
-            <p className="text-slate-400 text-sm font-light mt-4">
-              Diseñado desde cero para resolver los problemas de memoria en navegadores móviles y eliminar la dependencia de servicios SaaS privativos de terceros.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 p-8 rounded-3xl transition-all duration-300 flex flex-col justify-between">
-              <div>
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-6">
-                  <Layers size={24} />
+          {/* Section header */}
+          {(() => {
+            const { ref, visible } = useReveal();
+            return (
+              <div
+                ref={ref}
+                className="reveal-entry text-center max-w-xl mx-auto mb-20"
+                style={visible ? { opacity: 1, transform: 'translateY(0)' } : {}}
+              >
+                <div
+                  className="inline-block px-3 py-1 mb-4 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.2em]"
+                  style={{ color: '#34d399', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}
+                >
+                  Ingeniería Cloud-Native
                 </div>
-                <h3 className="text-xl font-display font-bold text-white uppercase mb-3">
-                  Pirámides Multirresolución
-                </h3>
-                <p className="text-slate-400 text-xs font-light leading-relaxed mb-6">
-                  Apple impone un límite estricto de textura de 4096px en Safari iOS. Nuestro procesador divide las capturas de dron en caras cúbicas y mosaicos de 512×512 píxeles organizados en niveles jerárquicos (LOD), logrando 0 crashes y zoom infinito.
+                <h2
+                  className="font-display font-black uppercase leading-tight"
+                  style={{ fontSize: 'clamp(1.8rem, 4vw, 3.2rem)' }}
+                >
+                  Funcionalidades Clave del Motor
+                </h2>
+                <p className="text-white/35 text-xs font-mono leading-relaxed mt-4">
+                  Diseñado desde cero para resolver los límites de memoria en navegadores móviles y eliminar la dependencia de SaaS privativos.
                 </p>
               </div>
-              <ul className="space-y-2 text-xs font-mono text-slate-300 border-t border-slate-800/80 pt-4">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-400" />
-                  <span>Selector dinámico (Baja, Media, Alta, Ultra)</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-400" />
-                  <span>Ahorro del 70% de datos en redes 4G/5G</span>
-                </li>
-              </ul>
+            );
+          })()}
+
+          {/* Bento grid: 1 wide + 2 stacked on desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Wide card */}
+            <div className="md:col-span-2">
+              <FeaturePillar
+                icon={Layers}
+                title="Pirámides Multirresolución"
+                body="Apple impone un límite estricto de textura de 4096px en Safari iOS. Nuestro procesador divide las capturas de dron en caras cúbicas y mosaicos de 512×512 píxeles organizados en niveles jerárquicos (LOD), logrando 0 crashes y zoom infinito en cualquier dispositivo."
+                items={['Selector dinámico: Baja, Media, Alta, Ultra', 'Ahorro del 70% de datos en redes 4G/5G', 'Zoom subpíxel con mipmapping GPU']}
+                accentColor="#10b981"
+                delay={0}
+              />
             </div>
 
-            <div className="bg-slate-900/60 border border-slate-800 hover:border-emerald-500/40 p-8 rounded-3xl transition-all duration-300 flex flex-col justify-between">
-              <div>
-                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 mb-6">
-                  <Smartphone size={24} />
-                </div>
-                <h3 className="text-xl font-display font-bold text-white uppercase mb-3">
-                  Giroscopio & Videos 360
-                </h3>
-                <p className="text-slate-400 text-xs font-light leading-relaxed mb-6">
-                  Sincronización fluida con los sensores inerciales del teléfono mediante permisos explícitos conformes a iOS 13+. Los hotspots integran videos de YouTube 360 con orientación en tiempo real y enlaces a Google Drive.
-                </p>
-              </div>
-              <ul className="space-y-2 text-xs font-mono text-slate-300 border-t border-slate-800/80 pt-4">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-blue-400" />
-                  <span>DeviceOrientationEvent optimizado</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-blue-400" />
-                  <span>Puente window.postMessage para iframes</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="bg-slate-900/60 border border-slate-800 hover:border-purple-500/40 p-8 rounded-3xl transition-all duration-300 flex flex-col justify-between">
-              <div>
-                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 mb-6">
-                  <Wand2 size={24} />
-                </div>
-                <h3 className="text-xl font-display font-bold text-white uppercase mb-3">
-                  Inteligencia Artificial
-                </h3>
-                <p className="text-slate-400 text-xs font-light leading-relaxed mb-6">
-                  Integración nativa con <strong>Google Vertex AI</strong> para parchear automáticamente el casquete polar inferior (Nadir) con Imagen 3, borrar sombras de dron y autodetectar puntos de interés y títulos mediante Gemini Vision.
-                </p>
-              </div>
-              <ul className="space-y-2 text-xs font-mono text-slate-300 border-t border-slate-800/80 pt-4">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-purple-400" />
-                  <span>Inpainting generativo de piso y trípode</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-purple-400" />
-                  <span>Sugerencias automáticas de hotspots</span>
-                </li>
-              </ul>
+            {/* Stacked narrow cards */}
+            <div className="flex flex-col gap-4">
+              <FeaturePillar
+                icon={Smartphone}
+                title="Giroscopio & Videos 360°"
+                body="Sincronización fluida con sensores inerciales mediante permisos conformes a iOS 13+. Hotspots con YouTube 360 y Drive."
+                items={['DeviceOrientationEvent optimizado', 'Puente window.postMessage iframes']}
+                accentColor="#06b6d4"
+                delay={80}
+              />
+              <FeaturePillar
+                icon={Wand2}
+                title="IA en Vertex AI"
+                body="Nadir patch con Imagen 3, borrado de sombras de dron y autodetección de hotspots por Gemini Vision."
+                items={['Inpainting generativo de piso', 'Sugerencias automáticas de hotspots']}
+                accentColor="#a78bfa"
+                delay={160}
+              />
             </div>
           </div>
         </div>
       </section>
 
-      {/* 3. COMPARATIVA */}
-      <section className="py-24 px-4 sm:px-6 lg:px-12 bg-slate-900/30 border-b border-slate-900">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <span className="text-emerald-400 font-mono text-xs font-bold uppercase tracking-widest">
-              POR QUÉ SOMOS DIFERENTES
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-display font-black text-white uppercase mt-2">
-              SaaS Comerciales Tradicionales vs Andina 360 Cloud
-            </h2>
-          </div>
+      {/* ══════════════════════════════════════════
+          3. COMPARISON TABLE
+         ══════════════════════════════════════════ */}
+      <section className="py-32 px-4 sm:px-6 lg:px-16">
+        {(() => {
+          const { ref, visible } = useReveal();
+          return (
+            <div className="max-w-5xl mx-auto">
+              <div
+                ref={ref}
+                className="reveal-entry text-center mb-16"
+                style={visible ? { opacity: 1, transform: 'translateY(0)' } : {}}
+              >
+                <div
+                  className="inline-block px-3 py-1 mb-4 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.2em]"
+                  style={{ color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)' }}
+                >
+                  Por qué somos diferentes
+                </div>
+                <h2
+                  className="font-display font-black uppercase"
+                  style={{ fontSize: 'clamp(1.6rem, 3.5vw, 2.8rem)' }}
+                >
+                  SaaS Tradicionales vs Andina 360 Cloud
+                </h2>
+              </div>
 
-          <div className="bg-slate-900/80 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/80 text-xs font-mono uppercase text-slate-400">
-                  <th className="p-4 sm:p-6">Característica</th>
-                  <th className="p-4 sm:p-6 text-red-400">Plataformas SaaS Tradicionales</th>
-                  <th className="p-4 sm:p-6 text-emerald-400 font-bold bg-emerald-500/5">Andina 360 Platform</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 text-xs sm:text-sm">
-                <tr>
-                  <td className="p-4 sm:p-6 font-semibold text-white">Propiedad de los Archivos</td>
-                  <td className="p-4 sm:p-6 text-slate-400">Alojados en servidores opacos del proveedor</td>
-                  <td className="p-4 sm:p-6 text-emerald-300 font-bold bg-emerald-500/5">Tu propio Google Cloud Storage</td>
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-6 font-semibold text-white">Costos Mensuales</td>
-                  <td className="p-4 sm:p-6 text-slate-400">$30 a $150 USD/mes recurrentes o marcas de agua</td>
-                  <td className="p-4 sm:p-6 text-emerald-300 font-bold bg-emerald-500/5">Costo por uso real en GCP (&lt;$5/mes)</td>
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-6 font-semibold text-white">Límites de Resolución Móvil</td>
-                  <td className="p-4 sm:p-6 text-slate-400">Comprimen y degradan la foto a 4K o menos</td>
-                  <td className="p-4 sm:p-6 text-emerald-300 font-bold bg-emerald-500/5">8K - 12K con pirámides multirres</td>
-                </tr>
-                <tr>
-                  <td className="p-4 sm:p-6 font-semibold text-white">Inteligencia Artificial</td>
-                  <td className="p-4 sm:p-6 text-slate-400">Inexistente o cobrada por crédito extra</td>
-                  <td className="p-4 sm:p-6 text-emerald-300 font-bold bg-emerald-500/5">Vertex AI (Imagen 3 & Gemini Vision)</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+              {/* Double-bezel table container */}
+              <div
+                style={{
+                  padding: '5px',
+                  borderRadius: '1.75rem',
+                  background: 'rgba(255,255,255,0.025)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: '0 32px 80px -20px rgba(0,0,0,0.8)',
+                }}
+              >
+                <div
+                  style={{
+                    borderRadius: 'calc(1.75rem - 5px)',
+                    overflow: 'hidden',
+                    background: 'linear-gradient(160deg, rgba(14,20,32,0.96) 0%, rgba(8,11,18,0.99) 100%)',
+                    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr
+                        className="text-[10px] font-mono uppercase tracking-[0.18em]"
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                      >
+                        <th className="p-5 sm:p-6 text-white/30">Característica</th>
+                        <th className="p-5 sm:p-6 text-red-400/70">SaaS Tradicional</th>
+                        <th className="p-5 sm:p-6 text-emerald-400 font-bold" style={{ background: 'rgba(16,185,129,0.04)' }}>
+                          Andina 360 Platform
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ROWS.map((row, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td className="p-5 sm:p-6 text-xs font-display font-semibold text-white/80">{row.label}</td>
+                          <td className="p-5 sm:p-6 text-xs font-mono text-white/30">{row.neg}</td>
+                          <td
+                            className="p-5 sm:p-6 text-xs font-mono font-bold text-emerald-300"
+                            style={{ background: 'rgba(16,185,129,0.03)' }}
+                          >
+                            {row.pos}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
-      {/* 4. BANNER FINAL CTA */}
-      <section className="py-20 px-4 sm:px-6 lg:px-12 text-center bg-gradient-to-t from-slate-900 to-slate-950">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl sm:text-5xl font-display font-black text-white uppercase tracking-tight mb-6">
-            Empieza a Visualizar y Crear Recorridos en 360°
-          </h2>
-          <p className="text-slate-400 text-sm font-light leading-relaxed mb-8">
-            Ingresa a la biblioteca para inspeccionar las 5 tomas panorámicas en alta resolución o utiliza el Tour Studio para vincular las habitaciones y generar el código embed.
-          </p>
+      {/* ══════════════════════════════════════════
+          4. FINAL CTA BANNER
+         ══════════════════════════════════════════ */}
+      <section className="relative py-32 px-4 sm:px-6 lg:px-16 overflow-hidden">
+        {/* Bottom glow */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 110%, rgba(16,185,129,0.12) 0%, transparent 70%)' }}
+        />
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <button
-              onClick={onNavigateToStudio}
-              className="px-8 py-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-xl shadow-emerald-500/25 flex items-center gap-2 hover:scale-105"
+        {(() => {
+          const { ref, visible } = useReveal();
+          return (
+            <div
+              ref={ref}
+              className="reveal-entry max-w-2xl mx-auto text-center"
+              style={visible ? { opacity: 1, transform: 'translateY(0)' } : {}}
             >
-              <span>Abrir Tour Studio</span>
-              <ArrowRight size={16} />
-            </button>
-            <button
-              onClick={onNavigateToLibrary}
-              className="px-8 py-4 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-mono text-xs font-bold uppercase tracking-wider rounded-xl transition-all"
-            >
-              <span>Explorar Biblioteca de Fotos</span>
-            </button>
-          </div>
-        </div>
+              <div
+                className="inline-flex items-center gap-1.5 px-3 py-1 mb-6 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.2em]"
+                style={{ color: '#34d399', background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}
+              >
+                <Zap size={10} />
+                Listo para usar
+              </div>
+
+              <h2
+                className="font-display font-black uppercase leading-tight mb-5"
+                style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)' }}
+              >
+                Empieza a Visualizar y Crear Recorridos en 360°
+              </h2>
+              <p className="text-white/35 text-sm font-mono leading-relaxed mb-10 max-w-lg mx-auto">
+                Inspecciona las 5 panorámicas en alta resolución o abre el Tour Studio para vincular habitaciones y generar código embed.
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <button
+                  onClick={onNavigateToStudio}
+                  className="group flex items-center gap-3 pl-5 pr-2 py-2 rounded-full font-display font-black text-sm uppercase tracking-wider text-slate-950 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.97]"
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #0ea5e9 100%)',
+                    boxShadow: '0 0 40px rgba(16,185,129,0.4)',
+                  }}
+                >
+                  <span>Abrir Tour Studio</span>
+                  <span
+                    className="flex items-center justify-center w-8 h-8 rounded-full transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-px group-hover:scale-105"
+                    style={{ background: 'rgba(0,0,0,0.15)' }}
+                  >
+                    <ArrowRight size={15} />
+                  </span>
+                </button>
+                <button
+                  onClick={onNavigateToLibrary}
+                  className="px-5 py-3 rounded-full font-mono text-xs font-bold uppercase tracking-wider text-white/60 hover:text-white transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.09)',
+                  }}
+                >
+                  Explorar Biblioteca
+                </button>
+              </div>
+
+              {/* Trust pill */}
+              <div className="mt-8 flex items-center justify-center gap-2 text-[11px] font-mono text-white/25">
+                <Shield size={12} className="text-emerald-500/60" />
+                Google Cloud Run · Firestore · Vertex AI
+              </div>
+            </div>
+          );
+        })()}
       </section>
 
     </div>
