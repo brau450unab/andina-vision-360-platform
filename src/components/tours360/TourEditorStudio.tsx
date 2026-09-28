@@ -1,687 +1,565 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Camera, Plus, Settings, Image as ImageIcon, Map, Layers, Type, Trash2, 
-  Save, Play, Link, Wand2, Youtube, HardDrive, Smartphone, Sparkles, Sliders,
-  Info, X 
+import React, { useState, useRef } from 'react';
+import {
+  Plus, MapPin, Trash2, Check, Share2, Layers, Upload,
+  Edit3, Info, Navigation, Sliders
 } from 'lucide-react';
-import { INITIAL_DEPARTMENT_TOUR, TourScene, HotspotLink, REAL_PANORAMAS } from './panoramasData';
+import { useTourSaaS } from '../../context/TourSaaSContext';
+import { PSVEngine360 } from './PSVEngine360';
+import { PhotopeaStudioModal } from './PhotopeaStudioModal';
 
 export const TourEditorStudio: React.FC = () => {
-  const [scenes, setScenes] = useState<TourScene[]>(INITIAL_DEPARTMENT_TOUR);
-  const [activeSceneId, setActiveSceneId] = useState<string>(INITIAL_DEPARTMENT_TOUR[0].id);
-  const [selectedHotspot, setSelectedHotspot] = useState<HotspotLink | null>(null);
+  const {
+    tours,
+    activeTour,
+    setActiveTourId,
+    activeSceneId,
+    setActiveSceneId,
+    library,
+    addScene,
+    removeScene,
+    addHotspot,
+    removeHotspot,
+    updateTourMeta,
+    addImageToLibrary
+  } = useTourSaaS();
 
-  // Editor states
-  const [isAddHotspotMode, setIsAddHotspotMode] = useState<boolean>(false);
-  const [aiProcessingMessage, setAiProcessingMessage] = useState<string | null>(null);
-  const [showEmbedCode, setShowEmbedCode] = useState<boolean>(false);
+  const [isPlacingHotspot, setIsPlacingHotspot] = useState(false);
+  const [pendingCoords, setPendingCoords] = useState<{ yaw: number; pitch: number } | null>(null);
+  const [hsType, setHsType] = useState<'scene' | 'info'>('scene');
+  const [hsText, setHsText] = useState('');
+  const [hsTargetSceneId, setHsTargetSceneId] = useState('');
+  const [hsDescription, setHsDescription] = useState('');
 
-  // Viewer state
-  const [yaw, setYaw] = useState<number>(0);
-  const [pitch, setPitch] = useState<number>(0);
-  const [fov, setFov] = useState<number>(75);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [imageLoaded, setImageLoaded] = useState(false);
+  const [showAddSceneModal, setShowAddSceneModal] = useState(false);
+  const [newSceneTitle, setNewSceneTitle] = useState('');
+  const [selectedAssetUrl, setSelectedAssetUrl] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [tempTitle, setTempTitle] = useState('');
+  const [isPhotopeaOpen, setIsPhotopeaOpen] = useState(false);
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const activeScene = scenes.find(s => s.id === activeSceneId);
+  if (!activeTour) {
+    return (
+      <div className="p-12 text-center text-slate-600">
+        No hay ninguna propiedad seleccionada. Crea o selecciona una desde "Mis Propiedades 360°".
+      </div>
+    );
+  }
 
-  // ── WEBGL RENDERER ────────────────────────────────────────────────────────
-  const [imageError, setImageError] = useState(false);
+  const currentScene =
+    activeTour.scenes.find((s) => s.id === activeSceneId) || activeTour.scenes[0];
 
-  useEffect(() => {
-    if (!activeScene || !canvasRef.current) {
-      setImageLoaded(false);
-      return;
-    }
-    const canvas = canvasRef.current;
-    const gl = canvas.getContext('webgl');
-    if (!gl) return;
+  const handleSphereClickCoords = (yaw: number, pitch: number) => {
+    setPendingCoords({ yaw, pitch });
+    const otherScene = activeTour.scenes.find((s) => s.id !== currentScene?.id);
+    setHsTargetSceneId(otherScene?.id || activeTour.scenes[0]?.id || '');
+    setHsText(otherScene ? `Ir a ${otherScene.title}` : 'Punto Comercial');
+  };
 
-    setImageLoaded(false);
-    setImageError(false);
+  const handleConfirmHotspot = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentScene || !pendingCoords || !hsText.trim()) return;
 
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = activeScene.imageUrl;
-
-    let texture = gl.createTexture();
-    
-    img.onload = () => {
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-      setImageLoaded(true);
-    };
-
-    img.onerror = () => {
-      setImageError(true);
-    };
-
-    const vsSource = `
-      attribute vec2 a_pos;
-      varying vec2 v_uv;
-      void main() {
-        v_uv = (a_pos + 1.0) * 0.5;
-        gl_Position = vec4(a_pos, 0.0, 1.0);
-      }
-    `;
-
-    const fsSource = `
-      precision highp float;
-      varying vec2 v_uv;
-      uniform sampler2D u_img;
-      uniform vec2 u_res;
-      uniform float u_yaw;
-      uniform float u_pitch;
-      uniform float u_fov;
-      #define PI 3.14159265359
-
-      void main() {
-        vec2 uv = (gl_FragCoord.xy / u_res) * 2.0 - 1.0;
-        uv.x *= u_res.x / u_res.y;
-
-        float tanFov = tan(radians(u_fov) * 0.5);
-        vec3 ray = normalize(vec3(uv * tanFov, 1.0));
-
-        float cp = cos(u_pitch);
-        float sp = sin(u_pitch);
-        mat3 rotP = mat3(1.0, 0.0, 0.0, 0.0, cp, -sp, 0.0, sp, cp);
-
-        float cy = cos(u_yaw);
-        float sy = sin(u_yaw);
-        mat3 rotY = mat3(cy, 0.0, sy, 0.0, 1.0, 0.0, -sy, 0.0, cy);
-
-        vec3 dir = rotY * rotP * ray;
-        float lon = atan(dir.x, dir.z);
-        float lat = asin(clamp(dir.y, -1.0, 1.0));
-
-        vec2 panoUv = vec2((lon / (2.0 * PI)) + 0.5, (lat / PI) + 0.5);
-        gl_FragColor = texture2D(u_img, panoUv);
-      }
-    `;
-
-    const vShader = gl.createShader(gl.VERTEX_SHADER)!;
-    gl.shaderSource(vShader, vsSource);
-    gl.compileShader(vShader);
-
-    const fShader = gl.createShader(gl.FRAGMENT_SHADER)!;
-    gl.shaderSource(fShader, fsSource);
-    gl.compileShader(fShader);
-
-    const prog = gl.createProgram()!;
-    gl.attachShader(prog, vShader);
-    gl.attachShader(prog, fShader);
-    gl.linkProgram(prog);
-
-    const buf = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
-
-    // Optimize resizing with ResizeObserver
-    let canvasWidth = canvas.clientWidth;
-    let canvasHeight = canvas.clientHeight;
-    
-    const resizeObserver = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        if (entry.target === canvas) {
-          canvasWidth = entry.contentRect.width;
-          canvasHeight = entry.contentRect.height;
-        }
-      }
+    addHotspot(activeTour.id, currentScene.id, {
+      pitch: pendingCoords.pitch,
+      yaw: pendingCoords.yaw,
+      type: hsType,
+      text: hsText.trim(),
+      targetSceneId: hsType === 'scene' ? hsTargetSceneId : undefined,
+      description: hsType === 'info' ? hsDescription.trim() : undefined
     });
-    resizeObserver.observe(canvas);
 
-    let animId: number;
-    const render = () => {
-      if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
+    setPendingCoords(null);
+    setIsPlacingHotspot(false);
+    setHsText('');
+    setHsDescription('');
+  };
+
+  const handleCreateScene = (e: React.FormEvent) => {
+    e.preventDefault();
+    const urlToUse = selectedAssetUrl || library[0]?.url;
+    if (!newSceneTitle.trim() || !urlToUse) return;
+
+    addScene(activeTour.id, newSceneTitle.trim(), urlToUse);
+    setNewSceneTitle('');
+    setSelectedAssetUrl('');
+    setShowAddSceneModal(false);
+  };
+
+  const handleDirectUploadScene = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (dataUrl) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, '');
+        addImageToLibrary(cleanName, dataUrl, 'Equirrectangular 2:1 (Subida en Studio)');
+        addScene(activeTour.id, cleanName, dataUrl);
       }
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.useProgram(prog);
-
-      const posAttr = gl.getAttribLocation(prog, 'a_pos');
-      gl.enableVertexAttribArray(posAttr);
-      gl.vertexAttribPointer(posAttr, 2, gl.FLOAT, false, 0, 0);
-
-      gl.uniform2f(gl.getUniformLocation(prog, 'u_res'), canvas.width, canvas.height);
-      gl.uniform1f(gl.getUniformLocation(prog, 'u_yaw'), yaw);
-      gl.uniform1f(gl.getUniformLocation(prog, 'u_pitch'), pitch);
-      gl.uniform1f(gl.getUniformLocation(prog, 'u_fov'), fov);
-
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      animId = requestAnimationFrame(render);
     };
-
-    animId = requestAnimationFrame(render);
-    
-    return () => {
-      cancelAnimationFrame(animId);
-      resizeObserver.disconnect();
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-    };
-  }, [activeScene, yaw, pitch, fov]);
-
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    if (!isAddHotspotMode || !canvasRef.current) return;
-    
-    // Inverse Raycasting to find exact spherical coordinates
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    // Convert to Normalized Device Coordinates (NDC)
-    let uvX = (mouseX / rect.width) * 2.0 - 1.0;
-    let uvY = ((rect.height - mouseY) / rect.height) * 2.0 - 1.0;
-    
-    // Aspect ratio correction
-    uvX *= rect.width / rect.height;
-    
-    const radFov = (fov * Math.PI) / 180.0;
-    const tanFov = Math.tan(radFov * 0.5);
-    
-    // Ray vector in view space
-    const rayX = uvX * tanFov;
-    const rayY = uvY * tanFov;
-    const rayZ = 1.0;
-    
-    // Normalize ray
-    const len = Math.sqrt(rayX*rayX + rayY*rayY + rayZ*rayZ);
-    const nRayX = rayX / len;
-    const nRayY = rayY / len;
-    const nRayZ = rayZ / len;
-    
-    // Rotate by Pitch
-    const cp = Math.cos(pitch);
-    const sp = Math.sin(pitch);
-    const pX = nRayX;
-    const pY = nRayY * cp - nRayZ * sp;
-    const pZ = nRayY * sp + nRayZ * cp;
-    
-    // Rotate by Yaw
-    const cy = Math.cos(yaw);
-    const sy = Math.sin(yaw);
-    const dX = pX * cy + pZ * sy;
-    const dY = pY;
-    const dZ = -pX * sy + pZ * cy;
-    
-    // Convert to Spherical coordinates
-    const clickedYaw = Math.atan2(dX, dZ);
-    const clickedPitch = Math.asin(Math.max(-1.0, Math.min(1.0, dY)));
-    
-    const currentYawDeg = parseFloat(((clickedYaw * 180) / Math.PI).toFixed(1));
-    const currentPitchDeg = parseFloat(((clickedPitch * 180) / Math.PI).toFixed(1));
-
-    const newHotspot: HotspotLink = {
-      id: `hs_${Date.now()}`,
-      type: 'info_popup',
-      yaw: currentYawDeg,
-      pitch: currentPitchDeg,
-      tooltip: 'Nuevo Punto de Interés',
-      title: 'Punto de Interés Interactivo',
-      description: 'Ingresa aquí las especificaciones del ambiente.',
-      youtubeVideoId: '',
-      driveUrl: ''
-    };
-
-    setScenes(prev => prev.map(s => {
-      if (s.id === activeSceneId) return { ...s, hotspots: [...s.hotspots, newHotspot] };
-      return s;
-    }));
-    setSelectedHotspot(newHotspot);
-    setIsAddHotspotMode(false);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const triggerAiGeminiHotspots = () => {
-    setAiProcessingMessage("Gemini 2.0 Multimodal analizando geometría 360°...");
-    setTimeout(() => {
-      const generatedSpot: HotspotLink = {
-        id: `hs_ai_${Date.now()}`,
-        type: 'info_popup',
-        yaw: parseFloat(((yaw * 180) / Math.PI + 35).toFixed(1)),
-        pitch: -5,
-        tooltip: 'Detectado por Gemini Vision',
-        title: 'Área de Alto Valor',
-        description: 'Detectado por visión computacional con óptima iluminación.',
-        youtubeVideoId: '',
-        driveUrl: ''
-      };
-      setScenes(prev => prev.map(s => {
-        if (s.id === activeSceneId) return { ...s, hotspots: [...s.hotspots, generatedSpot] };
-        return s;
-      }));
-      setSelectedHotspot(generatedSpot);
-      setAiProcessingMessage(null);
-    }, 1200);
+  const handlePublishAndCopy = () => {
+    updateTourMeta(activeTour.id, activeTour.title, activeTour.description, 'published');
+    const url = `${window.location.origin}${window.location.pathname}?tour=${activeTour.id}`;
+    navigator.clipboard?.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  const triggerNadirPatch = () => {
-    setAiProcessingMessage("Vertex AI aplicando Inpainting Generativo en el Nadir...");
-    setTimeout(() => {
-      setAiProcessingMessage(null);
-      alert("Parcheo completado: Se ha reconstruido el piso eliminando trípode y sombras.");
-    }, 1400);
-  };
-
-  const updateSelectedHotspot = (field: keyof HotspotLink, value: any) => {
-    if (!selectedHotspot) return;
-    const updated = { ...selectedHotspot, [field]: value };
-    setSelectedHotspot(updated);
-    setScenes(prev => prev.map(s => {
-      if (s.id === activeSceneId) return { ...s, hotspots: s.hotspots.map(h => h.id === updated.id ? updated : h) };
-      return s;
-    }));
-  };
-
-  const deleteSelectedHotspot = () => {
-    if (!selectedHotspot) return;
-    setScenes(prev => prev.map(s => {
-      if (s.id === activeSceneId) return { ...s, hotspots: s.hotspots.filter(h => h.id !== selectedHotspot.id) };
-      return s;
-    }));
-    setSelectedHotspot(null);
-  };
-
-  // ── RENDER ────────────────────────────────────────────────────────
   return (
-    <div className="w-full h-screen text-white flex flex-col overflow-hidden bg-[#050505]">
-      
-      {/* ── TOP HEADER (Dark Glass) ────────────────────── */}
-      <header 
-        className="h-[60px] shrink-0 flex items-center justify-between px-6 z-30"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(5,5,5,0.7)', backdropFilter: 'blur(20px)' }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <Sliders size={16} />
-          </div>
+    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 space-y-6 text-slate-900">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 sm:px-6 rounded-2xl bg-white border border-slate-200 shadow-xs">
+        <div className="flex flex-wrap items-center gap-4">
           <div>
-            <h1 className="text-[13px] font-display font-bold uppercase tracking-widest text-white leading-tight">
-              Tour Studio
-            </h1>
-            <p className="text-[9px] font-mono text-emerald-400 opacity-80">
-              MODO EDICIÓN AVANZADA
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setShowEmbedCode(true)}
-            className="group flex items-center gap-2 pl-4 pr-1.5 py-1.5 rounded-full font-mono text-[10px] uppercase font-bold text-slate-950 transition-all active:scale-[0.97]"
-            style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)' }}
-          >
-            <span>Generar Embed</span>
-            <div className="w-6 h-6 rounded-full flex items-center justify-center bg-black/15 group-hover:bg-black/25">
-              <Play size={10} className="ml-0.5" />
-            </div>
-          </button>
-        </div>
-      </header>
-
-      {/* ── MAIN WORKSPACE (3 Columns) ─────────────────── */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* LEFT PANEL: Scene List */}
-        <div 
-          className="w-72 shrink-0 flex flex-col z-20"
-          style={{ background: 'rgba(10,14,22,0.6)', borderRight: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(12px)' }}
-        >
-          <div className="p-4 border-b border-white/5">
-            <h2 className="text-[10px] font-mono uppercase font-bold text-white/40 tracking-[0.2em] flex items-center gap-2">
-              <Layers size={12} /> Nodos del Recorrido
-            </h2>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-            {scenes.map((scene, idx) => (
-              <button
-                key={scene.id}
-                onClick={() => { setActiveSceneId(scene.id); setSelectedHotspot(null); }}
-                className="w-full flex items-start gap-3 p-2.5 rounded-xl transition-all duration-300 text-left group"
-                style={activeSceneId === scene.id
-                  ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)' }
-                  : { background: 'transparent', border: '1px solid transparent' }
-                }
-              >
-                <div className="w-14 h-10 rounded-md overflow-hidden bg-black shrink-0 relative">
-                  <img src={scene.imageUrl} alt={scene.title} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute inset-0 bg-black/20" />
-                  <div className="absolute bottom-1 right-1 text-[8px] font-mono bg-black/80 px-1 rounded text-white">
-                    #{idx+1}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0 pt-0.5">
-                  <div className="text-xs font-display font-bold text-white/90 truncate group-hover:text-white">
-                    {scene.title}
-                  </div>
-                  <div className="text-[9px] font-mono text-emerald-400 mt-1">
-                    {scene.hotspots.length} Hotspots
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <div className="p-4 border-t border-white/5">
-            <button className="w-full py-2.5 rounded-lg border border-dashed border-white/20 text-xs font-mono text-white/50 hover:text-white hover:border-white/50 transition-colors flex items-center justify-center gap-2">
-              <Plus size={14} /> Importar Escena 8K
-            </button>
-          </div>
-        </div>
-
-        {/* MIDDLE PANEL: WebGL Canvas */}
-        <div className="flex-1 relative bg-black flex flex-col z-10" ref={containerRef}>
-          {/* AI Tools Bar Overlay */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-            <button
-              onClick={triggerAiGeminiHotspots}
-              className="px-4 py-2 rounded-full backdrop-blur-xl border flex items-center gap-2 transition-all hover:bg-white/10"
-              style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(139,92,246,0.3)' }}
-            >
-              <Sparkles size={14} className="text-purple-400" />
-              <span className="text-[10px] font-mono uppercase font-bold text-purple-100 tracking-wider">
-                Detectar Hotspots AI
-              </span>
-            </button>
-            <button
-              onClick={triggerNadirPatch}
-              className="px-4 py-2 rounded-full backdrop-blur-xl border flex items-center gap-2 transition-all hover:bg-white/10"
-              style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(245,158,11,0.3)' }}
-            >
-              <Wand2 size={14} className="text-amber-400" />
-              <span className="text-[10px] font-mono uppercase font-bold text-amber-100 tracking-wider">
-                Parchear Nadir AI
-              </span>
-            </button>
-          </div>
-
-          {/* Fallback Loader / Error */}
-          {!imageLoaded && !imageError && (
-            <div className="absolute inset-0 skeleton-shimmer z-0 flex flex-col items-center justify-center gap-4">
-              <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-              <div className="text-[10px] font-mono text-emerald-400 uppercase tracking-[0.2em] animate-pulse">
-                Procesando textura 8K...
-              </div>
-            </div>
-          )}
-
-          {imageError && (
-            <div className="absolute inset-0 z-0 flex flex-col items-center justify-center gap-4 bg-[#0a0a0a]">
-              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
-                <X size={20} />
-              </div>
-              <div className="text-[10px] font-mono text-red-400 uppercase tracking-widest text-center">
-                Error de Carga <br />
-                <span className="text-white/40 text-[9px]">La textura no pudo ser cargada.</span>
-              </div>
-            </div>
-          )}
-
-          {/* WebGL Canvas */}
-          <canvas
-            ref={canvasRef}
-            onClick={handleCanvasClick}
-            onPointerDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX, y: e.clientY }); }}
-            onPointerMove={(e) => {
-              if (!isDragging) return;
-              const dx = e.clientX - dragStart.x;
-              const dy = e.clientY - dragStart.y;
-              setDragStart({ x: e.clientX, y: e.clientY });
-              setYaw(prev => prev - dx * 0.005);
-              setPitch(prev => Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, prev - dy * 0.005)));
-            }}
-            onPointerUp={() => setIsDragging(false)}
-            onWheel={(e) => setFov(f => Math.max(30, Math.min(110, f + e.deltaY * 0.05)))}
-            className={`w-full h-full block z-10 ${isAddHotspotMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
-          />
-
-          {/* Render Hotspots on Canvas */}
-          {activeScene?.hotspots.map((hp) => {
-            const radYaw = yaw;
-            const radPitch = pitch;
-            const spotYaw = (hp.yaw * Math.PI) / 180;
-            const spotPitch = (hp.pitch * Math.PI) / 180;
-
-            let deltaYaw = spotYaw - radYaw;
-            while (deltaYaw > Math.PI) deltaYaw -= 2 * Math.PI;
-            while (deltaYaw < -Math.PI) deltaYaw += 2 * Math.PI;
-
-            if (Math.cos(deltaYaw) <= 0.1) return null;
-
-            const width = containerRef.current?.clientWidth || 800;
-            const height = containerRef.current?.clientHeight || 500;
-            const radFov = (fov * Math.PI) / 180;
-
-            const x = width / 2 + Math.tan(deltaYaw) * (width / (2 * Math.tan(radFov / 2)));
-            const y = height / 2 - Math.tan(spotPitch - radPitch) * (height / (2 * Math.tan(radFov / 2)));
-
-            if (x < 20 || x > width - 20 || y < 20 || y > height - 20) return null;
-
-            const isSelected = selectedHotspot?.id === hp.id;
-
-            return (
-              <button
-                key={hp.id}
-                onClick={(e) => { e.stopPropagation(); setSelectedHotspot(hp); }}
-                style={{ left: `${x}px`, top: `${y}px` }}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 z-20 group transition-all ease-[cubic-bezier(0.32,0.72,0,1)] ${isSelected ? 'scale-110' : 'hover:scale-110'}`}
-              >
-                {hp.type === 'scene_link' && (
-                  <div className="absolute inset-0 rounded-full border border-cyan-400 animate-ping opacity-50" />
-                )}
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md shadow-xl relative z-10"
-                  style={hp.type === 'scene_link'
-                    ? { background: 'rgba(6,182,212,0.85)', border: isSelected ? '2px solid #fff' : '1px solid rgba(255,255,255,0.4)', color: '#fff' }
-                    : { background: 'rgba(255,255,255,0.95)', border: isSelected ? '2px solid #10b981' : '1px solid rgba(255,255,255,1)', color: '#050505' }
-                  }
+            <span className="text-[10px] font-bold uppercase tracking-wider text-sky-700 block">
+              Propiedad Activa en Tour Studio
+            </span>
+            <div className="flex items-center gap-2 mt-0.5">
+              {editingTitle ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (tempTitle.trim()) {
+                      updateTourMeta(activeTour.id, tempTitle.trim(), activeTour.description);
+                    }
+                    setEditingTitle(false);
+                  }}
+                  className="flex items-center gap-2"
                 >
-                  {hp.type === 'scene_link' ? <Link size={14} /> : <Info size={14} />}
-                </div>
-              </button>
-            );
-          })}
-
-          {/* Add Hotspot Floating Action */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
-            <button
-              onClick={() => setIsAddHotspotMode(!isAddHotspotMode)}
-              className={`flex items-center gap-2 pl-2 pr-4 py-1.5 rounded-full backdrop-blur-xl border shadow-2xl transition-all duration-300 ${
-                isAddHotspotMode
-                  ? 'bg-emerald-500/90 border-emerald-400/50 text-slate-950'
-                  : 'bg-black/60 border-white/10 text-white hover:bg-black/80'
-              }`}
-            >
-              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isAddHotspotMode ? 'bg-black/20' : 'bg-white/10'}`}>
-                {isAddHotspotMode ? <X size={12} /> : <Plus size={12} />}
-              </div>
-              <span className="text-[10px] font-mono uppercase font-bold tracking-wider">
-                {isAddHotspotMode ? 'Cancelar / Esc' : 'Añadir Hotspot (Click)'}
-              </span>
-            </button>
-          </div>
-
-          {/* Coordinates HUD */}
-          <div className="absolute bottom-4 right-4 pointer-events-none z-20">
-            <div className="bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 flex flex-col items-end gap-1">
-              <span className="text-[9px] font-mono text-white/40">YAW: {((yaw * 180) / Math.PI).toFixed(1)}°</span>
-              <span className="text-[9px] font-mono text-white/40">PITCH: {((pitch * 180) / Math.PI).toFixed(1)}°</span>
-            </div>
-          </div>
-
-          {/* AI Processing Alert */}
-          {aiProcessingMessage && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 flex flex-col items-center shadow-2xl animate-in fade-in zoom-in-95">
-              <div className="w-12 h-12 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mb-4" />
-              <div className="text-xs font-mono text-emerald-400 max-w-[240px] text-center leading-relaxed">
-                {aiProcessingMessage}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT PANEL: Properties */}
-        <div 
-          className="w-80 shrink-0 overflow-y-auto z-20 custom-scrollbar"
-          style={{ background: 'rgba(10,14,22,0.6)', borderLeft: '1px solid rgba(255,255,255,0.06)', backdropFilter: 'blur(12px)' }}
-        >
-          <div className="p-4 border-b border-white/5 bg-white/[0.02]">
-            <h2 className="text-[10px] font-mono uppercase font-bold text-white/40 tracking-[0.2em] flex items-center gap-2">
-              <Settings size={12} /> Inspector
-            </h2>
-          </div>
-
-          {selectedHotspot ? (
-            <div className="p-5 space-y-6">
-              
-              {/* Hotspot Type Switch */}
-              <div className="flex bg-white/5 rounded-lg p-1 border border-white/5">
-                <button
-                  onClick={() => updateSelectedHotspot('type', 'info_popup')}
-                  className={`flex-1 py-1.5 text-[10px] font-mono font-bold uppercase rounded-md transition-all ${
-                    selectedHotspot.type === 'info_popup' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80'
-                  }`}
-                >
-                  Info Popup
-                </button>
-                <button
-                  onClick={() => updateSelectedHotspot('type', 'scene_link')}
-                  className={`flex-1 py-1.5 text-[10px] font-mono font-bold uppercase rounded-md transition-all ${
-                    selectedHotspot.type === 'scene_link' ? 'bg-white/10 text-cyan-400' : 'text-white/40 hover:text-white/80'
-                  }`}
-                >
-                  Link de Escena
-                </button>
-              </div>
-
-              {/* Shared Fields */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-mono text-white/40 mb-1.5 uppercase tracking-wider">
-                    Tooltip Corto
-                  </label>
                   <input
                     type="text"
-                    value={selectedHotspot.tooltip || ''}
-                    onChange={(e) => updateSelectedHotspot('tooltip', e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 focus:border-emerald-500/50 outline-none"
-                    placeholder="Ej: Cocina Americana"
+                    value={tempTitle}
+                    onChange={(e) => setTempTitle(e.target.value)}
+                    className="px-3 py-1 bg-slate-50 border border-sky-500 rounded-lg text-slate-900 text-sm font-bold"
+                    autoFocus
                   />
-                </div>
-
-                {/* Info Popup Specific */}
-                {selectedHotspot.type === 'info_popup' && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-mono text-white/40 mb-1.5 uppercase tracking-wider">
-                        Título del Modal
-                      </label>
-                      <input
-                        type="text"
-                        value={selectedHotspot.title || ''}
-                        onChange={(e) => updateSelectedHotspot('title', e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 focus:border-emerald-500/50 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-mono text-white/40 mb-1.5 uppercase tracking-wider">
-                        Descripción (Markdown)
-                      </label>
-                      <textarea
-                        value={selectedHotspot.description || ''}
-                        onChange={(e) => updateSelectedHotspot('description', e.target.value)}
-                        rows={3}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 focus:border-emerald-500/50 outline-none resize-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-mono text-white/40 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                        <Youtube size={10} className="text-red-400" /> ID Video YouTube 360
-                      </label>
-                      <input
-                        type="text"
-                        value={selectedHotspot.youtubeVideoId || ''}
-                        onChange={(e) => updateSelectedHotspot('youtubeVideoId', e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-white/20 focus:border-red-500/50 outline-none"
-                        placeholder="Ej: dQw4w9WgXcQ"
-                      />
-                    </div>
-                  </>
-                )}
-
-                {/* Scene Link Specific */}
-                {selectedHotspot.type === 'scene_link' && (
-                  <div>
-                    <label className="block text-[10px] font-mono text-white/40 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                      <Map size={10} className="text-cyan-400" /> Escena Destino
-                    </label>
-                    <select
-                      value={selectedHotspot.targetSceneId || ''}
-                      onChange={(e) => updateSelectedHotspot('targetSceneId', e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-cyan-500/50"
-                    >
-                      <option value="" disabled>Selecciona una escena...</option>
-                      {scenes.filter(s => s.id !== activeSceneId).map(s => (
-                        <option key={s.id} value={s.id}>{s.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {/* Coordinates block */}
-              <div className="bg-white/5 rounded-lg p-3 border border-white/5 flex gap-4">
-                <div className="flex-1">
-                  <div className="text-[9px] font-mono text-white/40 mb-1">YAW (°)</div>
-                  <input
-                    type="number"
-                    value={selectedHotspot.yaw}
-                    onChange={(e) => updateSelectedHotspot('yaw', parseFloat(e.target.value))}
-                    className="w-full bg-transparent text-xs text-white font-mono border-b border-white/20 focus:border-emerald-400 outline-none py-1"
-                  />
-                </div>
-                <div className="flex-1">
-                  <div className="text-[9px] font-mono text-white/40 mb-1">PITCH (°)</div>
-                  <input
-                    type="number"
-                    value={selectedHotspot.pitch}
-                    onChange={(e) => updateSelectedHotspot('pitch', parseFloat(e.target.value))}
-                    className="w-full bg-transparent text-xs text-white font-mono border-b border-white/20 focus:border-emerald-400 outline-none py-1"
-                  />
-                </div>
-              </div>
-
-              {/* Delete Action */}
-              <button 
-                onClick={deleteSelectedHotspot}
-                className="w-full py-2.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors text-xs font-mono font-bold flex items-center justify-center gap-2 uppercase tracking-wider"
-              >
-                <Trash2 size={14} /> Eliminar Hotspot
-              </button>
+                  <button
+                    type="submit"
+                    className="px-2.5 py-1 bg-sky-600 text-white rounded-lg text-xs font-bold"
+                  >
+                    Guardar
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <select
+                    value={activeTour.id}
+                    onChange={(e) => setActiveTourId(e.target.value)}
+                    className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-slate-900 font-bold text-sm focus:outline-none focus:border-sky-600"
+                  >
+                    {tours.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => {
+                      setTempTitle(activeTour.title);
+                      setEditingTitle(true);
+                    }}
+                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900"
+                    title="Renombrar propiedad"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
             </div>
-          ) : (
-            <div className="p-8 text-center flex flex-col items-center justify-center h-full text-white/30">
-              <div className="w-12 h-12 rounded-full border border-dashed border-white/20 flex items-center justify-center mb-4">
-                <Map size={16} />
-              </div>
-              <p className="text-xs font-mono mb-2">Ningún hotspot seleccionado</p>
-              <p className="text-[10px] font-mono leading-relaxed">
-                Haz clic en un marcador en el canvas para editar sus propiedades.
-              </p>
-            </div>
-          )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={() => {
+              setIsPlacingHotspot(!isPlacingHotspot);
+              setPendingCoords(null);
+            }}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+              isPlacingHotspot
+                ? 'bg-amber-500 text-white shadow-md'
+                : 'bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200'
+            }`}
+          >
+            <MapPin className="w-4 h-4" />
+            {isPlacingHotspot
+              ? 'Cancelar Modo Hotspot'
+              : '+ Agregar Hotspot (Clic en 360°)'}
+          </button>
+
+          <button
+            onClick={() => setIsPhotopeaOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 text-xs font-bold flex items-center gap-2 shadow-2xs transition-all cursor-pointer"
+          >
+            <Sliders className="w-4 h-4 text-emerald-600" />
+            Photopea & Magnific 8K
+          </button>
+
+          <button
+            onClick={handlePublishAndCopy}
+            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/15 transition-all flex items-center gap-2 cursor-pointer"
+          >
+            {copiedLink ? (
+              <>
+                <Check className="w-4 h-4" />
+                ¡Publicado y Link Copiado!
+              </>
+            ) : (
+              <>
+                <Share2 className="w-4 h-4" />
+                Publicar y Copiar Link Comercial
+              </>
+            )}
+          </button>
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="lg:col-span-3 rounded-2xl bg-white border border-slate-200 p-4 space-y-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-sky-600" />
+              Recintos / Escenas ({activeTour.scenes.length})
+            </h3>
+
+            <div className="flex items-center gap-1">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleDirectUploadScene}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700"
+                title="Subir foto 360° directo desde tu PC"
+              >
+                <Upload className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedAssetUrl(library[0]?.url || '');
+                  setShowAddSceneModal(true);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Escena
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+            {activeTour.scenes.map((scene, index) => {
+              const isSelected = scene.id === currentScene?.id;
+              return (
+                <div
+                  key={scene.id}
+                  onClick={() => setActiveSceneId(scene.id)}
+                  className={`group cursor-pointer p-2.5 rounded-xl border transition-all flex items-center gap-3 ${
+                    isSelected
+                      ? 'bg-sky-50/80 border-sky-500 ring-2 ring-sky-500/15'
+                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <img
+                    src={scene.panoramaUrl}
+                    alt={scene.title}
+                    className="w-14 h-10 rounded-lg object-cover shrink-0 border border-slate-200"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-900 truncate">
+                      {index + 1}. {scene.title}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-medium">
+                      {scene.hotspots.length} hotspots activos
+                    </div>
+                  </div>
+                  {activeTour.scenes.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeScene(activeTour.id, scene.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all"
+                      title="Eliminar escena"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="lg:col-span-6 space-y-4">
+          {currentScene && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-3 shadow-sm">
+              <PSVEngine360
+                tour={activeTour}
+                activeSceneId={currentScene.id}
+                onSceneChange={(id) => setActiveSceneId(id)}
+                editorMode={isPlacingHotspot}
+                onSphereClick={handleSphereClickCoords}
+                height="h-[540px]"
+              />
+            </div>
+          )}
+
+          {pendingCoords && (
+            <form
+              onSubmit={handleConfirmHotspot}
+              className="p-5 rounded-2xl bg-white border-2 border-sky-500 shadow-xl space-y-4 animate-fadeIn"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-sky-700 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-sky-600" />
+                  Configurar Hotspot en Coordenadas (Yaw: {pendingCoords.yaw.toFixed(2)}, Pitch:{' '}
+                  {pendingCoords.pitch.toFixed(2)})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPendingCoords(null)}
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-900"
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                    Tipo de Punto
+                  </label>
+                  <select
+                    value={hsType}
+                    onChange={(e) => setHsType(e.target.value as 'scene' | 'info')}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold"
+                  >
+                    <option value="scene">Navegar a otra habitación</option>
+                    <option value="info">Ficha Comercial / Precio UF</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                    Título Visible en el Punto
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={hsText}
+                    onChange={(e) => setHsText(e.target.value)}
+                    placeholder="Ej: Ir a Suite Principal / Terminaciones"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs"
+                  />
+                </div>
+
+                {hsType === 'scene' ? (
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                      Escena de Destino
+                    </label>
+                    <select
+                      value={hsTargetSceneId}
+                      onChange={(e) => {
+                        setHsTargetSceneId(e.target.value);
+                        const sc = activeTour.scenes.find((s) => s.id === e.target.value);
+                        if (sc) setHsText(`Ir a ${sc.title}`);
+                      }}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold"
+                    >
+                      {activeTour.scenes.map((sc) => (
+                        <option key={sc.id} value={sc.id}>
+                          {sc.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1">
+                      Detalle Comercial / Metraje / UF
+                    </label>
+                    <input
+                      type="text"
+                      value={hsDescription}
+                      onChange={(e) => setHsDescription(e.target.value)}
+                      placeholder="Ej: Cubierta de cuarzo, ventanales termopanel..."
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-sm cursor-pointer"
+                >
+                  Guardar Punto Interactivo
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+
+        <div className="lg:col-span-3 rounded-2xl bg-white border border-slate-200 p-4 space-y-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-emerald-600" />
+              Hotspots en Escena ({currentScene?.hotspots.length || 0})
+            </h3>
+          </div>
+
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            Para añadir un nuevo punto de navegación o ficha comercial, pulsa{' '}
+            <strong className="text-sky-700">"+ Agregar Hotspot"</strong> arriba y haz clic directamente sobre cualquier punto de la imagen 360°.
+          </p>
+
+          <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
+            {currentScene?.hotspots.length === 0 && (
+              <div className="p-6 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+                Esta escena aún no tiene puntos interactivos.
+              </div>
+            )}
+
+            {currentScene?.hotspots.map((hs) => (
+              <div
+                key={hs.id}
+                className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-2"
+              >
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                      hs.type === 'scene'
+                        ? 'bg-sky-100 text-sky-700 border border-sky-200'
+                        : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                    }`}
+                  >
+                    {hs.type === 'scene' ? (
+                      <Navigation className="w-3.5 h-3.5" />
+                    ) : (
+                      <Info className="w-3.5 h-3.5" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-900 truncate">{hs.text}</div>
+                    <div className="text-[10px] text-slate-500 font-medium">
+                      {hs.type === 'scene'
+                        ? 'Enlace de Habitación'
+                        : hs.description || 'Ficha Comercial'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeHotspot(activeTour.id, currentScene.id, hs.id)}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                  title="Eliminar hotspot"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {showAddSceneModal && (
+        <div className="fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={handleCreateScene}
+            className="w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-2xl"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-extrabold text-slate-900">
+                Añadir Nuevo Recinto 360° al Proyecto
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddSceneModal(false)}
+                className="text-xs font-bold text-slate-500 hover:text-slate-900"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-600 mb-1.5">
+                Nombre del Recinto / Habitación
+              </label>
+              <input
+                type="text"
+                required
+                value={newSceneTitle}
+                onChange={(e) => setNewSceneTitle(e.target.value)}
+                placeholder="Ej: Cocina Equipada / Dormitorio Principal / Vista Aérea"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-sky-600 focus:bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase text-slate-600 mb-2">
+                Selecciona una Panorámica de tu Biblioteca 360°
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-60 overflow-y-auto p-1">
+                {library.map((asset) => (
+                  <div
+                    key={asset.id}
+                    onClick={() => setSelectedAssetUrl(asset.url)}
+                    className={`cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
+                      selectedAssetUrl === asset.url
+                        ? 'border-sky-600 ring-2 ring-sky-600/20'
+                        : 'border-slate-200 opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={asset.url} alt={asset.name} className="w-full h-20 object-cover" />
+                    <div className="p-2 bg-white text-[11px] text-slate-800 font-bold truncate">
+                      {asset.name}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddSceneModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs cursor-pointer"
+              >
+                Agregar Escena al Tour
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <PhotopeaStudioModal
+        isOpen={isPhotopeaOpen}
+        onClose={() => setIsPhotopeaOpen(false)}
+        imageUrl={currentScene?.panoramaUrl || '/panoramas/depto_living_terraza.jpg'}
+        imageName={currentScene?.title || 'Escena Activa 360°'}
+        onSaveEditedImage={(newUrl, newName) => {
+          addImageToLibrary(newName, newUrl, 'Equirrectangular 2:1 (Photopea 8K)');
+          if (currentScene) {
+            addScene(activeTour.id, newName, newUrl);
+          }
+        }}
+      />
     </div>
   );
 };
