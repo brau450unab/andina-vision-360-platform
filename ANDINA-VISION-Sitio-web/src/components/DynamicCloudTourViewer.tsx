@@ -77,7 +77,7 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
   useEffect(() => {
     async function fetchTour() {
       try {
-        const res = await fetch(`\${apiBaseUrl}/embed/\${tourId}`);
+        const res = await fetch(`${apiBaseUrl}/embed/${tourId}`);
         if (res.ok) {
           const data = await res.json();
           setTour(data);
@@ -124,6 +124,8 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
     return () => window.removeEventListener('deviceorientation', handleOrientation);
   }, [gyroActive]);
 
+  const [imageError, setImageError] = useState(false);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -131,20 +133,28 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
     if (!gl) return;
 
     setImageLoaded(false);
+    setImageError(false);
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = currentScene.preview_url || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=2048&q=80';
     
     let texture = gl.createTexture();
+    
     img.onload = () => {
       gl.bindTexture(gl.TEXTURE_2D, texture);
+      // 🔥 ESTO EVITA QUE LA IMAGEN SE VEA AL REVÉS EN WEBGL 🔥
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
       setImageLoaded(true);
+    };
+
+    img.onerror = () => {
+      setImageError(true);
     };
 
     const vsSource = `
@@ -207,10 +217,28 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
 
+    // Optimize resizing with ResizeObserver
+    let canvasWidth = canvas.clientWidth;
+    let canvasHeight = canvas.clientHeight;
+    
+    const resizeObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        if (entry.target === canvas) {
+          canvasWidth = entry.contentRect.width;
+          canvasHeight = entry.contentRect.height;
+        }
+      }
+    });
+    resizeObserver.observe(canvas);
+
     let animId: number;
     const render = () => {
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
+      // Set dimension only if it changed to avoid layout thrashing
+      if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+      }
+      
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.useProgram(program);
       const posAttr = gl.getAttribLocation(program, 'a_position');
@@ -227,7 +255,12 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
     };
 
     animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
+    
+    return () => {
+      cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+    };
   }, [currentScene, yaw, pitch, fov]);
 
   const handleSceneTransition = (targetId: string) => {
@@ -242,18 +275,30 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full overflow-hidden select-none \${
+      className={`relative w-full overflow-hidden select-none ${
         isFullscreen 
           ? 'fixed inset-0 z-50 rounded-none h-screen bg-[#050505]' 
           : 'h-[550px] bg-[#050505]'
       }`}
     >
-      {/* ── LOADER SHIMMER ────────────────────────────────────── */}
-      {!imageLoaded && (
+      {/* ── LOADER SHIMMER / ERROR ──────────────────────────────── */}
+      {!imageLoaded && !imageError && (
         <div className="absolute inset-0 skeleton-shimmer z-0 flex flex-col items-center justify-center gap-4">
           <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
           <div className="text-[10px] font-mono text-emerald-400 uppercase tracking-[0.2em] animate-pulse">
             Cargando Textura 8K...
+          </div>
+        </div>
+      )}
+
+      {imageError && (
+        <div className="absolute inset-0 z-0 flex flex-col items-center justify-center gap-4 bg-[#0a0a0a]">
+          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
+            <X size={20} />
+          </div>
+          <div className="text-[10px] font-mono text-red-400 uppercase tracking-widest text-center">
+            Error de Carga <br />
+            <span className="text-white/40 text-[9px]">Textura no disponible o bloqueada por CORS</span>
           </div>
         </div>
       )}
@@ -382,7 +427,7 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
                 setActiveModalHotspot(hp);
               }
             }}
-            style={{ left: `\${x}px`, top: `\${y}px` }}
+            style={{ left: `${x}px`, top: `${y}px` }}
             className="absolute -translate-x-1/2 -translate-y-1/2 z-20 group"
           >
             {/* Magnetic Button Hover Physics container */}
@@ -463,7 +508,7 @@ export const DynamicCloudTourViewer: React.FC<DynamicCloudTourViewerProps> = ({
                   style={{ border: '1px solid rgba(255,255,255,0.06)' }}
                 >
                   <iframe
-                    src={`https://www.youtube-nocookie.com/embed/\${activeModalHotspot.youtube_video_id}?autoplay=1&enablejsapi=1`}
+                    src={`https://www.youtube-nocookie.com/embed/${activeModalHotspot.youtube_video_id}?autoplay=1&enablejsapi=1`}
                     className="w-full h-full border-0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen

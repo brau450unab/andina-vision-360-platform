@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, Plus, Settings, Image as ImageIcon, Map, Layers, Type, Trash2, 
-  Save, Play, Link, Wand2, Youtube, HardDrive, Smartphone, Sparkles, Sliders 
+  Save, Play, Link, Wand2, Youtube, HardDrive, Smartphone, Sparkles, Sliders,
+  Info, X 
 } from 'lucide-react';
 import { INITIAL_DEPARTMENT_TOUR, TourScene, HotspotLink, REAL_PANORAMAS } from './panoramasData';
 
@@ -29,6 +30,8 @@ export const TourEditorStudio: React.FC = () => {
   const activeScene = scenes.find(s => s.id === activeSceneId);
 
   // ── WEBGL RENDERER ────────────────────────────────────────────────────────
+  const [imageError, setImageError] = useState(false);
+
   useEffect(() => {
     if (!activeScene || !canvasRef.current) {
       setImageLoaded(false);
@@ -39,20 +42,27 @@ export const TourEditorStudio: React.FC = () => {
     if (!gl) return;
 
     setImageLoaded(false);
+    setImageError(false);
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = activeScene.imageUrl;
 
     let texture = gl.createTexture();
+    
     img.onload = () => {
       gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); // 🔥 FIJADO
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
       setImageLoaded(true);
+    };
+
+    img.onerror = () => {
+      setImageError(true);
     };
 
     const vsSource = `
@@ -115,10 +125,26 @@ export const TourEditorStudio: React.FC = () => {
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]), gl.STATIC_DRAW);
 
+    // Optimize resizing with ResizeObserver
+    let canvasWidth = canvas.clientWidth;
+    let canvasHeight = canvas.clientHeight;
+    
+    const resizeObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        if (entry.target === canvas) {
+          canvasWidth = entry.contentRect.width;
+          canvasHeight = entry.contentRect.height;
+        }
+      }
+    });
+    resizeObserver.observe(canvas);
+
     let animId: number;
     const render = () => {
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
+      if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+      }
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.useProgram(prog);
 
@@ -136,16 +162,67 @@ export const TourEditorStudio: React.FC = () => {
     };
 
     animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
+    
+    return () => {
+      cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+    };
   }, [activeScene, yaw, pitch, fov]);
 
   const handleCanvasClick = (e: React.MouseEvent) => {
-    if (!isAddHotspotMode) return;
-    const currentYawDeg = parseFloat(((yaw * 180) / Math.PI).toFixed(1));
-    const currentPitchDeg = parseFloat(((pitch * 180) / Math.PI).toFixed(1));
+    if (!isAddHotspotMode || !canvasRef.current) return;
+    
+    // Inverse Raycasting to find exact spherical coordinates
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Convert to Normalized Device Coordinates (NDC)
+    let uvX = (mouseX / rect.width) * 2.0 - 1.0;
+    let uvY = ((rect.height - mouseY) / rect.height) * 2.0 - 1.0;
+    
+    // Aspect ratio correction
+    uvX *= rect.width / rect.height;
+    
+    const radFov = (fov * Math.PI) / 180.0;
+    const tanFov = Math.tan(radFov * 0.5);
+    
+    // Ray vector in view space
+    const rayX = uvX * tanFov;
+    const rayY = uvY * tanFov;
+    const rayZ = 1.0;
+    
+    // Normalize ray
+    const len = Math.sqrt(rayX*rayX + rayY*rayY + rayZ*rayZ);
+    const nRayX = rayX / len;
+    const nRayY = rayY / len;
+    const nRayZ = rayZ / len;
+    
+    // Rotate by Pitch
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+    const pX = nRayX;
+    const pY = nRayY * cp - nRayZ * sp;
+    const pZ = nRayY * sp + nRayZ * cp;
+    
+    // Rotate by Yaw
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const dX = pX * cy + pZ * sy;
+    const dY = pY;
+    const dZ = -pX * sy + pZ * cy;
+    
+    // Convert to Spherical coordinates
+    const clickedYaw = Math.atan2(dX, dZ);
+    const clickedPitch = Math.asin(Math.max(-1.0, Math.min(1.0, dY)));
+    
+    const currentYawDeg = parseFloat(((clickedYaw * 180) / Math.PI).toFixed(1));
+    const currentPitchDeg = parseFloat(((clickedPitch * 180) / Math.PI).toFixed(1));
 
     const newHotspot: HotspotLink = {
-      id: \`hs_\${Date.now()}\`,
+      id: `hs_${Date.now()}`,
       type: 'info_popup',
       yaw: currentYawDeg,
       pitch: currentPitchDeg,
@@ -165,14 +242,14 @@ export const TourEditorStudio: React.FC = () => {
   };
 
   const triggerAiGeminiHotspots = () => {
-    setAiProcessingMessage("✨ Gemini 2.0 Multimodal analizando geometría 360°...");
+    setAiProcessingMessage("Gemini 2.0 Multimodal analizando geometría 360°...");
     setTimeout(() => {
       const generatedSpot: HotspotLink = {
-        id: \`hs_ai_\${Date.now()}\`,
+        id: `hs_ai_${Date.now()}`,
         type: 'info_popup',
         yaw: parseFloat(((yaw * 180) / Math.PI + 35).toFixed(1)),
         pitch: -5,
-        tooltip: '✨ Detectado por Gemini Vision',
+        tooltip: 'Detectado por Gemini Vision',
         title: 'Área de Alto Valor',
         description: 'Detectado por visión computacional con óptima iluminación.',
         youtubeVideoId: '',
@@ -188,10 +265,10 @@ export const TourEditorStudio: React.FC = () => {
   };
 
   const triggerNadirPatch = () => {
-    setAiProcessingMessage("🧹 Vertex AI aplicando Inpainting Generativo en el Nadir...");
+    setAiProcessingMessage("Vertex AI aplicando Inpainting Generativo en el Nadir...");
     setTimeout(() => {
       setAiProcessingMessage(null);
-      alert("✅ Parcheo completado: Se ha reconstruido el piso eliminando trípode y sombras.");
+      alert("Parcheo completado: Se ha reconstruido el piso eliminando trípode y sombras.");
     }, 1400);
   };
 
@@ -328,12 +405,24 @@ export const TourEditorStudio: React.FC = () => {
             </button>
           </div>
 
-          {/* Fallback Loader */}
-          {!imageLoaded && (
+          {/* Fallback Loader / Error */}
+          {!imageLoaded && !imageError && (
             <div className="absolute inset-0 skeleton-shimmer z-0 flex flex-col items-center justify-center gap-4">
               <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
               <div className="text-[10px] font-mono text-emerald-400 uppercase tracking-[0.2em] animate-pulse">
                 Procesando textura 8K...
+              </div>
+            </div>
+          )}
+
+          {imageError && (
+            <div className="absolute inset-0 z-0 flex flex-col items-center justify-center gap-4 bg-[#0a0a0a]">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-500">
+                <X size={20} />
+              </div>
+              <div className="text-[10px] font-mono text-red-400 uppercase tracking-widest text-center">
+                Error de Carga <br />
+                <span className="text-white/40 text-[9px]">La textura no pudo ser cargada.</span>
               </div>
             </div>
           )}
@@ -353,7 +442,7 @@ export const TourEditorStudio: React.FC = () => {
             }}
             onPointerUp={() => setIsDragging(false)}
             onWheel={(e) => setFov(f => Math.max(30, Math.min(110, f + e.deltaY * 0.05)))}
-            className={`w-full h-full block z-10 \${isAddHotspotMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+            className={`w-full h-full block z-10 ${isAddHotspotMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
           />
 
           {/* Render Hotspots on Canvas */}
@@ -384,8 +473,8 @@ export const TourEditorStudio: React.FC = () => {
               <button
                 key={hp.id}
                 onClick={(e) => { e.stopPropagation(); setSelectedHotspot(hp); }}
-                style={{ left: \`\${x}px\`, top: \`\${y}px\` }}
-                className={\`absolute -translate-x-1/2 -translate-y-1/2 z-20 group transition-all ease-[cubic-bezier(0.32,0.72,0,1)] \${isSelected ? 'scale-110' : 'hover:scale-110'}\`}
+                style={{ left: `${x}px`, top: `${y}px` }}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 z-20 group transition-all ease-[cubic-bezier(0.32,0.72,0,1)] ${isSelected ? 'scale-110' : 'hover:scale-110'}`}
               >
                 {hp.type === 'scene_link' && (
                   <div className="absolute inset-0 rounded-full border border-cyan-400 animate-ping opacity-50" />
@@ -407,13 +496,13 @@ export const TourEditorStudio: React.FC = () => {
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
             <button
               onClick={() => setIsAddHotspotMode(!isAddHotspotMode)}
-              className={\`flex items-center gap-2 pl-2 pr-4 py-1.5 rounded-full backdrop-blur-xl border shadow-2xl transition-all duration-300 \${
+              className={`flex items-center gap-2 pl-2 pr-4 py-1.5 rounded-full backdrop-blur-xl border shadow-2xl transition-all duration-300 ${
                 isAddHotspotMode
                   ? 'bg-emerald-500/90 border-emerald-400/50 text-slate-950'
                   : 'bg-black/60 border-white/10 text-white hover:bg-black/80'
-              }\`}
+              }`}
             >
-              <div className={\`w-6 h-6 rounded-full flex items-center justify-center \${isAddHotspotMode ? 'bg-black/20' : 'bg-white/10'}\`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isAddHotspotMode ? 'bg-black/20' : 'bg-white/10'}`}>
                 {isAddHotspotMode ? <X size={12} /> : <Plus size={12} />}
               </div>
               <span className="text-[10px] font-mono uppercase font-bold tracking-wider">
@@ -459,17 +548,17 @@ export const TourEditorStudio: React.FC = () => {
               <div className="flex bg-white/5 rounded-lg p-1 border border-white/5">
                 <button
                   onClick={() => updateSelectedHotspot('type', 'info_popup')}
-                  className={\`flex-1 py-1.5 text-[10px] font-mono font-bold uppercase rounded-md transition-all \${
+                  className={`flex-1 py-1.5 text-[10px] font-mono font-bold uppercase rounded-md transition-all ${
                     selectedHotspot.type === 'info_popup' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80'
-                  }\`}
+                  }`}
                 >
                   Info Popup
                 </button>
                 <button
                   onClick={() => updateSelectedHotspot('type', 'scene_link')}
-                  className={\`flex-1 py-1.5 text-[10px] font-mono font-bold uppercase rounded-md transition-all \${
+                  className={`flex-1 py-1.5 text-[10px] font-mono font-bold uppercase rounded-md transition-all ${
                     selectedHotspot.type === 'scene_link' ? 'bg-white/10 text-cyan-400' : 'text-white/40 hover:text-white/80'
-                  }\`}
+                  }`}
                 >
                   Link de Escena
                 </button>
