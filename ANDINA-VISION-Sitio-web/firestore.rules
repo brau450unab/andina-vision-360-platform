@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if the document belongs to the requesting user
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      // Tours subcollection
+      match /tours/{tourId} {
+        // Owner can read and write
+        allow write: if isOwner(userId);
+        
+        // Anyone can read a published tour if we want to share the link.
+        // For now, let's allow public read so sharing tours works.
+        allow read: if true;
+      }
+      
+      // Panoramas subcollection
+      match /panoramas/{panoId} {
+        allow write: if isOwner(userId);
+        
+        // Panoramas also need to be publicly readable when loaded in a shared tour
+        allow read: if true;
+      }
+    }
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

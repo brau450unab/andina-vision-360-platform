@@ -1,0 +1,37 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Panoramas directory
+    match /users/{userId}/panoramas/{filename} {
+      // Anyone can read (so that published tours can load the images)
+      allow read: if true;
+      
+      // Only the authenticated owner can upload/delete
+      allow write: if isOwner(userId)
+                   // Must be an image
+                   && request.resource.contentType.matches('image/.*')
+                   // Max size 50MB per panorama
+                   && request.resource.size < 50 * 1024 * 1024;
+    }
+    
+    // General user directory rule
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isOwner(userId);
+    }
+    
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
