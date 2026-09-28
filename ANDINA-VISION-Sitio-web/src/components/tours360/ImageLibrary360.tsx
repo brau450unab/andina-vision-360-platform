@@ -26,6 +26,7 @@ import {
 } from './panoramasData';
 import { useTourSaaS } from '../../context/TourSaaSContext';
 import { PSVEngine360 } from './PSVEngine360';
+import { uploadCloudPanoramaImage } from '../../services/tourCloudService';
 
 interface ImageLibrary360Props {
   onOpenStudio?: (tourId?: string) => void;
@@ -40,6 +41,7 @@ export const ImageLibrary360: React.FC<ImageLibrary360Props> = ({ onOpenStudio }
     openTourInStudio,
     storageUsedMB,
     storageLimitMB,
+    user
   } = useTourSaaS();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +59,9 @@ export const ImageLibrary360: React.FC<ImageLibrary360Props> = ({ onOpenStudio }
   const [uploadFolder, setUploadFolder] = useState('Depto Piloto Cavancha');
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string>('');
   const [uploadFileSizeMB, setUploadFileSizeMB] = useState<number>(14.2);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Create Tour from Selection Modal State
   const [isCreateTourModalOpen, setIsCreateTourModalOpen] = useState(false);
@@ -96,12 +101,29 @@ export const ImageLibrary360: React.FC<ImageLibrary360Props> = ({ onOpenStudio }
     setUploadPreviewUrl(url);
     setUploadTitle(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
     setUploadFileSizeMB(Number((file.size / (1024 * 1024)).toFixed(1)) || 12.5);
+    setUploadFile(file);
   };
 
-  const handleConfirmUpload = (e: React.FormEvent) => {
+  const handleConfirmUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadPreviewUrl && !uploadTitle) return;
-    const finalUrl = uploadPreviewUrl || '/panoramas/depto_living_terraza.jpg';
+    if (!uploadTitle) return;
+    
+    let finalUrl = uploadPreviewUrl || '/panoramas/depto_living_terraza.jpg';
+    
+    if (uploadFile) {
+      setIsUploading(true);
+      try {
+        finalUrl = await uploadCloudPanoramaImage(user?.uid || 'anonymous', uploadFile, (progress) => {
+          setUploadProgress(Math.round(progress));
+        });
+      } catch (err) {
+        console.error('Error uploading file:', err);
+        alert('Error al subir la imagen a la nube.');
+        setIsUploading(false);
+        return;
+      }
+    }
+    
     addPanoramaToGallery({
       title: uploadTitle || 'Nueva Panorámica 360° 8K',
       location: uploadLocation || 'Iquique, Chile',
@@ -116,6 +138,10 @@ export const ImageLibrary360: React.FC<ImageLibrary360Props> = ({ onOpenStudio }
       folder: uploadFolder,
       aiEnhanced: true,
     });
+    
+    setIsUploading(false);
+    setUploadProgress(0);
+    setUploadFile(null);
     setUploadTitle('');
     setUploadPreviewUrl('');
     setIsUploadModalOpen(false);
@@ -627,8 +653,14 @@ export const ImageLibrary360: React.FC<ImageLibrary360Props> = ({ onOpenStudio }
                 >
                   Cancelar
                 </button>
+                {isUploading && (
+                  <div className='flex items-center gap-2 text-xs font-bold text-[#FF3158]'>
+                    Subiendo... {uploadProgress}%
+                  </div>
+                )}
                 <button
                   type="submit"
+                  disabled={isUploading}
                   className="px-5 py-2.5 rounded-xl bg-[#222222] hover:bg-black text-white font-display font-black text-xs uppercase tracking-wider cursor-pointer"
                 >
                   Guardar en Mi Galería 360°
