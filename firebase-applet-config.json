@@ -1,0 +1,10 @@
+{
+  "projectId": "andina-vision-sistemas-saas",
+  "appId": "1:106335345720:web:andina-vision-saas-web",
+  "apiKey": "AIzaSyD0eHGj7HpYAJeOfPub2Bq04eSO4kL6Pmg",
+  "authDomain": "andina-vision-sistemas-saas.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "andina-vision-sistemas-saas.firebasestorage.app",
+  "messagingSenderId": "106335345720",
+  "measurementId": ""
+}

@@ -1,0 +1,36 @@
+{
+  "name": "andina-vision-360-platform",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Plataforma SaaS Comercial de Recorridos Virtuales 360° Interactivos, Suite Photopea y Magnific AI 8K",
+  "scripts": {
+    "prebuild": "node scripts/restore-assets.mjs",
+    "dev": "vite --port=3006 --host=0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --port=8080 --host=0.0.0.0",
+    "lint": "tsc --noEmit",
+    "deploy:cloudrun": "bash scripts/deploy-gcp.sh"
+  },
+  "dependencies": {
+    "@photo-sphere-viewer/core": "^5.14.1",
+    "@photo-sphere-viewer/markers-plugin": "^5.14.1",
+    "@tailwindcss/vite": "^4.1.14",
+    "firebase": "^12.11.0",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.13.2",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.183.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
