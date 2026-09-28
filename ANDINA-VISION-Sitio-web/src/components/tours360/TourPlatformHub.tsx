@@ -1,39 +1,86 @@
-import React, { useState } from 'react';
-import { Globe2, Camera, Sliders, Home, ArrowLeft, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Globe2,
+  Camera,
+  Sliders,
+  Home,
+  ArrowLeft,
+  ChevronRight,
+  FolderKanban,
+  CreditCard,
+} from 'lucide-react';
 import { TourCommercialLanding } from './TourCommercialLanding';
+import { MyToursWorkspace } from './MyToursWorkspace';
 import { ImageLibrary360 } from './ImageLibrary360';
 import { TourEditorStudio } from './TourEditorStudio';
+import { TourPricingSection } from './TourPricingSection';
 import { TourPlatformAuthModal } from './TourPlatformAuthModal';
+import { TourSaaSProvider, useTourSaaS } from '../../context/TourSaaSContext';
+import { DashboardCentral } from './DashboardCentral';
 
-export type TourPlatformView = 'commercial' | 'library' | 'studio';
+export type TourPlatformView = 'commercial' | 'dashboard' | 'my_tours' | 'library' | 'studio' | 'pricing';
 
 interface TourPlatformHubProps {
-  onBackToMainSite?: () => void;
   initialView?: TourPlatformView;
 }
 
-const NAV_TABS: { id: TourPlatformView; label: string; shortLabel: string; icon: React.ElementType }[] = [
-  { id: 'commercial', label: 'Visión Comercial', shortLabel: 'Inicio', icon: Home },
-  { id: 'library',    label: 'Biblioteca 360',  shortLabel: '360°',  icon: Camera },
-  { id: 'studio',     label: 'Tour Studio',      shortLabel: 'Studio', icon: Sliders },
+const NAV_TABS: {
+  id: TourPlatformView;
+  label: string;
+  shortLabel: string;
+  icon: React.ElementType;
+}[] = [
+  { id: 'commercial', label: 'Landing 360°', shortLabel: 'Inicio', icon: Home },
+  { id: 'dashboard', label: 'Panel', shortLabel: 'Panel', icon: Home }, // Will hide one of these based on auth state later
+  { id: 'my_tours', label: 'Mis Tours', shortLabel: 'Tours', icon: FolderKanban },
+  { id: 'library', label: 'Galería 360°', shortLabel: 'Fotos', icon: Camera },
+  { id: 'studio', label: 'Tour Studio', shortLabel: 'Editor', icon: Sliders },
+  { id: 'pricing', label: 'Planes', shortLabel: 'Planes', icon: CreditCard },
 ];
 
-export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
-  onBackToMainSite,
-  initialView = 'commercial'
+import { useNavigate } from 'react-router-dom';
+
+const TourPlatformHubInner: React.FC<TourPlatformHubProps> = ({
+  initialView = 'commercial',
 }) => {
+  const navigate = useNavigate();
+  const { user, tours, openTourInStudio } = useTourSaaS();
   const [currentView, setCurrentView] = useState<TourPlatformView>(initialView);
-  const [userRole, setUserRole]       = useState<'client' | 'admin'>('client');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
+  // Protect views: if not logged in, force auth for protected views
+  useEffect(() => {
+    const protectedViews: TourPlatformView[] = ['dashboard', 'my_tours', 'library', 'studio'];
+    if (!user && protectedViews.includes(currentView)) {
+      setIsAuthModalOpen(true);
+      setCurrentView('commercial'); // Fallback
+    }
+  }, [currentView, user]);
+
+  // Check if URL has ?tour=<slug> or ?view=<view>
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tourSlug = params.get('tour');
+    const viewParam = params.get('view') as TourPlatformView | null;
+    if (tourSlug) {
+      const matched = tours.find((t) => t.slug === tourSlug || t.id === tourSlug);
+      if (matched) {
+        openTourInStudio(matched.id);
+        setCurrentView('studio');
+      }
+    } else if (viewParam && ['commercial', 'dashboard', 'my_tours', 'library', 'studio', 'pricing'].includes(viewParam)) {
+      setCurrentView(viewParam);
+    } else if (user && currentView === 'commercial') {
+      setCurrentView('dashboard');
+    }
+  }, []);
+
   const handleRoleSelection = (role: 'client' | 'admin') => {
-    setUserRole(role);
-    setCurrentView(role === 'client' ? 'library' : 'studio');
+    setCurrentView('dashboard');
   };
 
   return (
     <div className="grain-overlay relative min-h-screen text-white" style={{ background: '#050505' }}>
-
       {/* ── Orbital Mesh Gradient Background ──────────────── */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
         <div
@@ -43,7 +90,7 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
             height: 560,
             top: '-12%',
             left: '15%',
-            background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(16,185,129,0.16) 0%, transparent 70%)',
           }}
         />
         <div
@@ -53,7 +100,7 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
             height: 480,
             bottom: '5%',
             right: '8%',
-            background: 'radial-gradient(circle, rgba(6,182,212,0.14) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(6,182,212,0.13) 0%, transparent 70%)',
           }}
         />
         <div
@@ -63,42 +110,53 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
             height: 300,
             top: '40%',
             left: '55%',
-            background: 'radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(139,92,246,0.09) 0%, transparent 70%)',
             animation: 'drift-a 28s ease-in-out infinite reverse',
           }}
         />
       </div>
 
       {/* ── Floating Island Nav Pill ───────────────────────── */}
-      <div className="nav-pill flex items-center gap-1.5 px-1" style={{ position: 'sticky', top: '1.25rem', zIndex: 40 }}>
-
+      <div
+        className="nav-pill flex items-center gap-1 px-1.5"
+        style={{ position: 'sticky', top: '1rem', zIndex: 40, maxWidth: '96vw', overflowX: 'auto' }}
+      >
         {/* Back to main site */}
-        {onBackToMainSite && (
-          <button
-            onClick={onBackToMainSite}
-            className="flex items-center gap-1.5 pl-2 pr-3 py-2 rounded-full text-xs font-mono text-white/50 hover:text-white transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/5 shrink-0"
-            title="Volver al sitio principal"
-          >
-            <ArrowLeft size={13} />
-            <span className="hidden sm:inline">Inicio</span>
-          </button>
-        )}
+        <button
+          onClick={() => navigate('/')}
+          className="flex items-center gap-1.5 pl-2.5 pr-3 py-2 rounded-full text-xs font-mono text-white/55 hover:text-white transition-all hover:bg-white/5 shrink-0 cursor-pointer"
+          title="Volver al sitio principal de Andina Visión"
+        >
+          <ArrowLeft size={13} />
+          <span className="hidden lg:inline">Agencia</span>
+        </button>
 
         {/* Brand */}
         <button
           onClick={() => setCurrentView('commercial')}
-          className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/5 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] shrink-0"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/5 transition-all shrink-0 cursor-pointer"
         >
-          {/* Double-bezel logo mark */}
-          <div className="double-bezel-outer !p-1 !rounded-xl shrink-0"
-            style={{ padding: '3px', borderRadius: '0.625rem', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="double-bezel-inner flex items-center justify-center"
-              style={{ borderRadius: '0.5rem', background: 'linear-gradient(135deg, #059669 0%, #0e7490 100%)', padding: '5px' }}>
+          <div
+            style={{
+              padding: '3px',
+              borderRadius: '0.625rem',
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            <div
+              className="flex items-center justify-center"
+              style={{
+                borderRadius: '0.5rem',
+                background: 'linear-gradient(135deg, #059669 0%, #0e7490 100%)',
+                padding: '5px',
+              }}
+            >
               <Globe2 size={14} className="text-white" />
             </div>
           </div>
           <span className="hidden md:inline text-xs font-display font-bold text-white tracking-wide">
-            Andina <span className="text-emerald-400">360°</span>
+            Andina <span className="text-emerald-400">360° Cloud</span>
           </span>
         </button>
 
@@ -106,7 +164,14 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
         <div className="w-px h-5 bg-white/10 mx-1 shrink-0" />
 
         {/* Tab pills */}
-        {NAV_TABS.map((tab) => {
+        {NAV_TABS.filter(tab => {
+          if (!user) {
+            // Logged out: show only commercial and pricing
+            return tab.id === 'commercial' || tab.id === 'pricing';
+          }
+          // Logged in: Hide 'commercial', show everything else
+          return tab.id !== 'commercial';
+        }).map((tab) => {
           const Icon = tab.icon;
           const active = currentView === tab.id;
           return (
@@ -114,19 +179,19 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
               key={tab.id}
               onClick={() => setCurrentView(tab.id)}
               className={[
-                'relative flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-mono transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] whitespace-nowrap',
+                'relative flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-mono transition-all whitespace-nowrap cursor-pointer',
                 active
                   ? 'text-slate-950 font-bold'
-                  : 'text-white/50 hover:text-white hover:bg-white/5',
+                  : 'text-white/55 hover:text-white hover:bg-white/5',
               ].join(' ')}
             >
-              {/* Active pill fill */}
               {active && (
                 <span
                   className="absolute inset-0 rounded-full"
                   style={{
                     background: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
-                    boxShadow: '0 0 16px rgba(16,185,129,0.4), inset 0 1px 1px rgba(255,255,255,0.3)',
+                    boxShadow:
+                      '0 0 16px rgba(16,185,129,0.4), inset 0 1px 1px rgba(255,255,255,0.3)',
                   }}
                 />
               )}
@@ -140,32 +205,40 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
         {/* Separator */}
         <div className="w-px h-5 bg-white/10 mx-1 shrink-0" />
 
-        {/* Role badge */}
+        {/* Account / Auth Pill */}
         <button
           onClick={() => setIsAuthModalOpen(true)}
-          className="group flex items-center gap-2 px-3 py-2 rounded-full hover:bg-white/5 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] shrink-0"
+          className="group flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-white/5 transition-all shrink-0 cursor-pointer"
+          title="Gestionar Cuenta o Cambiar Perfil"
         >
-          {/* Animated status dot */}
           <span className="relative flex h-2 w-2">
             <span
               className={[
                 'animate-ping absolute inline-flex h-full w-full rounded-full opacity-60',
-                userRole === 'admin' ? 'bg-emerald-400' : 'bg-cyan-400',
+                user ? 'bg-emerald-400' : 'bg-amber-400',
               ].join(' ')
             }
             />
             <span
               className={[
                 'relative inline-flex rounded-full h-2 w-2',
-                userRole === 'admin' ? 'bg-emerald-400' : 'bg-cyan-400',
+                user ? 'bg-emerald-400' : 'bg-amber-400',
               ].join(' ')
             }
             />
           </span>
-          <span className="text-[11px] font-mono text-white/60 group-hover:text-white transition-colors duration-300 hidden sm:inline">
-            {userRole === 'admin' ? 'Creador Pro' : 'Cliente'}
-          </span>
-          <ChevronRight size={11} className="text-white/30 group-hover:text-white/60 group-hover:translate-x-px transition-all duration-300" />
+          <div className="text-left hidden sm:block">
+            <div className="text-[11px] font-display font-bold text-white/90 leading-none">
+              {user ? user.name.split(' ')[0] : 'Iniciar Sesión'}
+            </div>
+            <div className="text-[9px] font-mono text-emerald-400 uppercase tracking-wider mt-0.5">
+              {user ? `Plan ${user.planId.toUpperCase()}` : 'Cuenta Gratis'}
+            </div>
+          </div>
+          <ChevronRight
+            size={11}
+            className="text-white/30 group-hover:text-white/70 group-hover:translate-x-px transition-all"
+          />
         </button>
       </div>
 
@@ -173,12 +246,54 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
       <main className="relative" style={{ zIndex: 1 }}>
         {currentView === 'commercial' && (
           <TourCommercialLanding
+            onNavigateToMyTours={() => setCurrentView('my_tours')}
             onNavigateToLibrary={() => setCurrentView('library')}
             onNavigateToStudio={() => setCurrentView('studio')}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
           />
         )}
-        {currentView === 'library' && <ImageLibrary360 />}
-        {currentView === 'studio'  && <TourEditorStudio />}
+
+        {currentView === 'dashboard' && (
+          <DashboardCentral
+            onNavigate={(view) => setCurrentView(view)}
+            onOpenStudio={(tourId) => {
+              openTourInStudio(tourId);
+              setCurrentView('studio');
+            }}
+          />
+        )}
+
+        {currentView === 'my_tours' && (
+          <MyToursWorkspace
+            onOpenEditorForTour={(tourId: string) => {
+              openTourInStudio(tourId);
+              setCurrentView('studio');
+            }}
+            onNavigateToGallery={() => setCurrentView('library')}
+            onNavigateToPricing={() => setCurrentView('pricing')}
+            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          />
+        )}
+
+        {currentView === 'library' && (
+          <ImageLibrary360 />
+        )}
+
+        {currentView === 'studio' && (
+          <TourEditorStudio />
+        )}
+
+        {currentView === 'pricing' && (
+          <TourPricingSection
+            onSelectTier={() => {
+              if (!user) {
+                setIsAuthModalOpen(true);
+              } else {
+                setCurrentView('my_tours');
+              }
+            }}
+          />
+        )}
       </main>
 
       {/* ── Auth Modal ─────────────────────────────────────── */}
@@ -188,5 +303,13 @@ export const TourPlatformHub: React.FC<TourPlatformHubProps> = ({
         onSelectRole={handleRoleSelection}
       />
     </div>
+  );
+};
+
+export const TourPlatformHub: React.FC<TourPlatformHubProps> = (props) => {
+  return (
+    <TourSaaSProvider>
+      <TourPlatformHubInner {...props} />
+    </TourSaaSProvider>
   );
 };
